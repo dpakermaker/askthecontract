@@ -1,0 +1,4 @@
+streamlit==1.45.0
+anthropic==0.40.0
+openai==1.59.5
+numpy==1.26.4

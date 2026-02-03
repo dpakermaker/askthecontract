@@ -1,0 +1,15 @@
+{
+  "contract_id": "NAC",
+  "airline_name": "Northern Air Cargo",
+  "airline_code": "NAC",
+  "total_pages": 396,
+  "last_updated": "2024-01-15",
+  "contract_version": "DOS+4",
+  "chunks_count": 1267,
+  "description": "Northern Air Cargo Pilot Contract - Complete CBA",
+  "active": true,
+  "requires_payment": true,
+  "price_per_month": 4.00,
+  "b737_cola": "2.00%",
+  "b767_cola": "3.00% (years 1-4), 2.00% (year 5+)"
+}
