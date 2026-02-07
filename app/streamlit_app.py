@@ -76,32 +76,32 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
         model="text-embedding-3-small"
     )
     question_embedding = response.data[0].embedding
-    
+
     # Find similar chunks
     similarities = []
     for i, chunk_embedding in enumerate(embeddings):
         score = cosine_similarity(question_embedding, chunk_embedding)
         similarities.append((score, chunks[i]))
-    
+
     # Sort and get top chunks
     similarities.sort(reverse=True, key=lambda x: x[0])
     return [chunk for score, chunk in similarities[:max_chunks]]
 
 def ask_question(question, chunks, embeddings, openai_client, anthropic_client, contract_id):
     start_time = time.time()
-    
+
     # Search for relevant chunks
     relevant_chunks = search_contract(question, chunks, embeddings, openai_client)
-    
+
     # Build context
     context_parts = []
     for chunk in relevant_chunks:
         section_info = chunk.get('section', 'Unknown Section')
         aircraft_info = f", Aircraft: {chunk['aircraft_type']}" if chunk.get('aircraft_type') else ""
         context_parts.append(f"[Page {chunk['page']}, {section_info}{aircraft_info}]\n{chunk['text']}")
-    
+
     context = "\n\n---\n\n".join(context_parts)
-    
+
     # Create prompt
     prompt = f"""You are analyzing a complete pilot union contract.
 
@@ -121,7 +121,7 @@ INSTRUCTIONS:
 Format your answer with:
 📄 CONTRACT LANGUAGE: [exact quotes]
 📍 [Section, Page]
-📖 EXPLANATION: [plain English]
+📝 EXPLANATION: [plain English]
 🔵 STATUS: [CLEAR/AMBIGUOUS/NOT ADDRESSED]
 
 Answer:"""
@@ -131,10 +131,10 @@ Answer:"""
         temperature=0,
         messages=[{"role": "user", "content": prompt}]
     )
-   
+
     answer = message.content[0].text
     response_time = time.time() - start_time
-    
+
     # Determine status
     if '🔵 STATUS: CLEAR' in answer:
         status = 'CLEAR'
@@ -142,7 +142,7 @@ Answer:"""
         status = 'AMBIGUOUS'
     else:
         status = 'NOT_ADDRESSED'
-    
+
     return answer, status, response_time
 
 # Initialize session state
@@ -157,91 +157,93 @@ if 'selected_contract' not in st.session_state:
 if not st.session_state.authenticated:
     st.title("✈️ AskTheContract - Beta Access")
     st.write("**AI-Powered Contract Q&A for Pilots**")
-    
+
     password = st.text_input("Enter beta password:", type="password")
-    
+
     if st.button("Login"):
         if password == "nacpilot2026":  # Simple password for beta
             st.session_state.authenticated = True
             st.rerun()
         else:
             st.error("Incorrect password. Contact the developer for access.")
-    
+
     st.info("🔒 This is a beta test version for Northern Air Cargo pilots.")
-    
+
 else:
     # Main app
     st.title("✈️ AskTheContract")
     st.caption("AI-Powered Contract Q&A System")
-    
+
     # Sidebar
     with st.sidebar:
         st.header("Contract Selection")
-        
+
         manager = init_contract_manager()
         available_contracts = manager.get_available_contracts()
-        
+
         contract_options = {
-            info['airline_name']: contract_id 
+            info['airline_name']: contract_id
             for contract_id, info in available_contracts.items()
         }
-        
+
         selected_name = st.selectbox(
             "Select your airline:",
             options=list(contract_options.keys())
         )
-        
+
         selected_contract_id = contract_options[selected_name]
-        
+
         # Load contract if changed
         if st.session_state.selected_contract != selected_contract_id:
             st.session_state.selected_contract = selected_contract_id
             st.session_state.conversation = []
-        
+
         # Show contract info
         contract_info = manager.get_contract_info(selected_contract_id)
         st.info(f"""
         **{contract_info['airline_name']}**
-        
+
         📄 Pages: {contract_info['total_pages']}
-        
+
         📅 Version: {contract_info['contract_version']}
-        
+
         ✈️ Aircraft: {contract_info.get('b737_cola', 'N/A')}
         """)
-        
+
         if st.button("Clear Conversation"):
             st.session_state.conversation = []
             st.rerun()
-        
+
         if st.button("Logout"):
             st.session_state.authenticated = False
             st.rerun()
-    
+
     # Main content
     st.write("---")
-    
-    # Question input
-    question = st.text_input(
-        "Ask a question about your contract:",
-        placeholder="Example: What is the daily pay guarantee?"
-    )
-    
-    if st.button("Ask", type="primary") and question:
+
+    # Question input in a form (clears after submit)
+    with st.form(key="question_form", clear_on_submit=True):
+        question = st.text_input(
+            "Ask a question about your contract:",
+            placeholder="Example: What is the daily pay guarantee?"
+        )
+        submit_button = st.form_submit_button("Ask", type="primary")
+
+    if submit_button and question:
         with st.spinner("Searching contract and generating answer..."):
             # Load contract data
             chunks, embeddings = load_contract(st.session_state.selected_contract)
-            
+
             # Initialize clients
             openai_client, anthropic_client = init_clients()
-            
+
             # Get answer
             answer, status, response_time = ask_question(
-                question, chunks, embeddings, 
+                question, chunks, embeddings,
                 openai_client, anthropic_client,
                 st.session_state.selected_contract
             )
-            
+
             # Log the question
             logger = init_logger()
             logger.log_question(
@@ -251,23 +253,23 @@ else:
                 contract_id=st.session_state.selected_contract,
                 response_time=response_time
             )
-            
+
             # Add to conversation
             st.session_state.conversation.append({
                 'question': question,
                 'answer': answer,
                 'status': status
             })
-    
+
     # Display conversation
     if st.session_state.conversation:
         st.write("---")
         st.subheader("Conversation History")
-        
+
         for i, qa in enumerate(reversed(st.session_state.conversation)):
             with st.container():
                 st.write(f"**Q{len(st.session_state.conversation) - i}:** {qa['question']}")
-                
+
                 # Color code based on status
                 if qa['status'] == 'CLEAR':
                     st.success(qa['answer'])
@@ -275,8 +277,8 @@ else:
                     st.warning(qa['answer'])
                 else:
                     st.info(qa['answer'])
-                
+
                 st.write("---")
-    
+
     # Footer
     st.caption("⚠️ **Disclaimer:** This tool provides contract information only. It is not legal advice. Verify all answers against the actual contract and consult your union representative for guidance on disputes.")
