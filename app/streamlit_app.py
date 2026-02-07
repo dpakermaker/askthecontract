@@ -69,13 +69,18 @@ def load_contract(contract_id):
 def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
-def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
-    # Create question embedding
-    response = openai_client.embeddings.create(
-        input=question,
+# Cached embedding - same question always returns same vector
+@st.cache_data(ttl=86400, show_spinner=False)
+def get_embedding_cached(question_text, _openai_client):
+    response = _openai_client.embeddings.create(
+        input=question_text,
         model="text-embedding-3-small"
     )
-    question_embedding = response.data[0].embedding
+    return response.data[0].embedding
+
+def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
+    # Use cached embedding so same question always gets same chunks
+    question_embedding = get_embedding_cached(question, openai_client)
 
     # Find similar chunks
     similarities = []
