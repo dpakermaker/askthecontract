@@ -125,13 +125,14 @@ Format your answer with:
 🔵 STATUS: [CLEAR/AMBIGUOUS/NOT ADDRESSED]
 
 Answer:"""
+    
+    # Get answer from Claude
     message = anthropic_client.messages.create(
         model="claude-sonnet-4-20250514",
         max_tokens=2000,
-        temperature=0,
         messages=[{"role": "user", "content": prompt}]
     )
-   
+    
     answer = message.content[0].text
     response_time = time.time() - start_time
     
