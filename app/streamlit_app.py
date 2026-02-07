@@ -92,7 +92,8 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
     similarities.sort(reverse=True, key=lambda x: x[0])
     return [chunk for score, chunk in similarities[:max_chunks]]
 
-def ask_question(question, chunks, embeddings, openai_client, anthropic_client, contract_id):
+def _ask_question_api(question, chunks, embeddings, openai_client, anthropic_client, contract_id):
+    """Does the actual API call. Called by the cached wrapper."""
     start_time = time.time()
 
     # Detect question type to determine how many chunks to pull
@@ -120,7 +121,7 @@ def ask_question(question, chunks, embeddings, openai_client, anthropic_client, 
 
     context = "\n\n---\n\n".join(context_parts)
 
-    # System prompt - CACHED after first call (must be 1024+ tokens)
+    # System prompt - CACHED by Anthropic after first call (1024+ tokens required)
     system_prompt = """You are a neutral contract reference tool for the Northern Air Cargo (NAC) pilot union contract. This is a 396-page Joint Collective Bargaining Agreement (JCBA) between Northern Air Cargo and its pilots. Your role is to provide accurate, unbiased contract analysis based solely on the contract language provided to you.
 
 CORE PRINCIPLES:
@@ -241,6 +242,16 @@ Answer:"""
         status = 'NOT_ADDRESSED'
 
     return answer, status, response_time
+
+# ANSWER CACHE - same question returns saved answer, zero API calls
+@st.cache_data(ttl=86400, show_spinner=False)
+def ask_question_cached(question, contract_id, _chunks, _embeddings, _openai_client, _anthropic_client):
+    """Cached wrapper. Same question + same contract = saved answer returned instantly."""
+    return _ask_question_api(question, _chunks, _embeddings, _openai_client, _anthropic_client, contract_id)
+
+def ask_question(question, chunks, embeddings, openai_client, anthropic_client, contract_id):
+    """Main entry point. Routes through cache."""
+    return ask_question_cached(question, contract_id, chunks, embeddings, openai_client, anthropic_client)
 
 # Initialize session state
 if 'authenticated' not in st.session_state:
