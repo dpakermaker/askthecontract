@@ -90,8 +90,21 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
 def ask_question(question, chunks, embeddings, openai_client, anthropic_client, contract_id):
     start_time = time.time()
 
+    # Detect question type to determine how many chunks to pull
+    pay_keywords = ['pay', 'rate', 'hourly', 'salary', 'wage', 'compensation', 'earning', 'make per hour', 'dpg', 'scale', 'duty rig', 'trip rig', 'pch']
+    scheduling_keywords = ['day off', 'days off', 'rest period', 'rest requirement', 'schedule', 'line construction', 'composite line', 'regular line', 'reserve line', 'bid line', 'workday', 'work day', 'consecutive days', 'week off', 'time off', 'duty free']
+
+    question_lower = question.lower()
+    is_pay_question = any(keyword in question_lower for keyword in pay_keywords)
+    is_scheduling_question = any(keyword in question_lower for keyword in scheduling_keywords)
+
+    if is_pay_question or is_scheduling_question:
+        max_chunks = 100
+    else:
+        max_chunks = 75
+
     # Search for relevant chunks
-    relevant_chunks = search_contract(question, chunks, embeddings, openai_client)
+    relevant_chunks = search_contract(question, chunks, embeddings, openai_client, max_chunks=max_chunks)
 
     # Build context
     context_parts = []
