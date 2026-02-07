@@ -120,13 +120,8 @@ def ask_question(question, chunks, embeddings, openai_client, anthropic_client, 
 
     context = "\n\n---\n\n".join(context_parts)
 
-    # Create prompt
-    prompt = f"""You are analyzing a complete pilot union contract.
-
-CONTRACT SECTIONS:
-{context}
-
-QUESTION: {question}
+    # System prompt - gets CACHED after first call (saves ~90% on these tokens)
+    system_prompt = """You are analyzing a complete pilot union contract.
 
 INSTRUCTIONS:
 1. Provide accurate information from the contract
@@ -140,14 +135,29 @@ Format your answer with:
 📄 CONTRACT LANGUAGE: [exact quotes]
 📍 [Section, Page]
 📝 EXPLANATION: [plain English]
-🔵 STATUS: [CLEAR/AMBIGUOUS/NOT ADDRESSED]
+🔵 STATUS: [CLEAR/AMBIGUOUS/NOT ADDRESSED]"""
+
+    # User message - changes every query (contract chunks + question)
+    user_content = f"""CONTRACT SECTIONS:
+{context}
+
+QUESTION: {question}
 
 Answer:"""
+
+    # API call with prompt caching on the system prompt
     message = anthropic_client.messages.create(
         model="claude-sonnet-4-20250514",
         max_tokens=2000,
         temperature=0,
-        messages=[{"role": "user", "content": prompt}]
+        system=[
+            {
+                "type": "text",
+                "text": system_prompt,
+                "cache_control": {"type": "ephemeral"}
+            }
+        ],
+        messages=[{"role": "user", "content": user_content}]
     )
 
     answer = message.content[0].text
