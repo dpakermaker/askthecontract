@@ -23,9 +23,6 @@ st.set_page_config(
 
 # ============================================================
 # SEMANTIC SIMILARITY CACHE
-# Shared across all users. If a new question is 96%+ similar
-# in meaning to a previously asked question, returns the
-# saved answer instead of calling the API again.
 # ============================================================
 class SemanticCache:
     SIMILARITY_THRESHOLD = 0.96
@@ -33,10 +30,9 @@ class SemanticCache:
 
     def __init__(self):
         self._lock = threading.Lock()
-        self._entries = {}  # key: contract_id -> list of (embedding, question, answer, status, response_time)
+        self._entries = {}
 
     def lookup(self, embedding, contract_id):
-        """Check if a similar question was already answered for this contract."""
         with self._lock:
             entries = self._entries.get(contract_id, [])
             for cached_emb, cached_q, cached_answer, cached_status, cached_time in entries:
@@ -48,7 +44,6 @@ class SemanticCache:
         return None
 
     def store(self, embedding, question, answer, status, response_time, contract_id):
-        """Save a new answer for future similar questions."""
         with self._lock:
             if contract_id not in self._entries:
                 self._entries[contract_id] = []
@@ -58,7 +53,6 @@ class SemanticCache:
             entries.append((embedding, question, answer, status, response_time))
 
     def clear(self, contract_id=None):
-        """Clear entries. If contract_id given, only clear that contract."""
         with self._lock:
             if contract_id:
                 self._entries.pop(contract_id, None)
@@ -73,7 +67,6 @@ def get_semantic_cache():
 # STANDARD INIT FUNCTIONS
 # ============================================================
 
-# Load API keys
 @st.cache_resource
 def load_api_keys():
     try:
@@ -116,7 +109,6 @@ def load_contract(contract_id):
 def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
-# Cached embedding - same question always returns same vector
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_embedding_cached(question_text, _openai_client):
     response = _openai_client.embeddings.create(
@@ -125,25 +117,103 @@ def get_embedding_cached(question_text, _openai_client):
     )
     return response.data[0].embedding
 
+# ============================================================
+# FORCE-INCLUDE CHUNKS
+# When certain topics are detected, always include chunks
+# containing critical contract language regardless of
+# embedding similarity score. This ensures key provisions
+# are never missed due to how the question is worded.
+# ============================================================
+
+# Phrases that MUST be in the context when topic is detected
+FORCE_INCLUDE_RULES = {
+    'days_off': {
+        'trigger_keywords': ['day off', 'days off', 'rest period', 'week off', 'time off', 'duty free', 'one day per week', 'day per week', 'weekly day'],
+        'must_include_phrases': [
+            'regular line shall be scheduled with at least one (1) day off in any seven',
+            'composite line shall be scheduled with at least one (1) scheduled day off in any seven',
+            'shall receive at least one (1) twenty-four (24) hour rest period free from all duty within any seven',
+            'schedule the pilot for one (1) day off in every seven (7) days',
+            'minimum scheduled days off in all constructed initial lines shall be thirteen',
+            'shall have at least two (2) separate periods of at least three (3) consecutive days off',
+            'scheduled to have a minimum of one (1) day off during every seven (7) consecutive days of training',
+            'minimum rest requirements for a pilot who is awarded a domicile flex line',
+        ]
+    },
+    'pay': {
+        'trigger_keywords': ['pay', 'rate', 'hourly', 'salary', 'wage', 'compensation', 'dpg', 'daily pay guarantee', 'duty rig', 'trip rig', 'pch', 'make per hour'],
+        'must_include_phrases': [
+            'daily pay guarantee',
+            'one (1) pch for every two (2) hours',
+            'trip rig',
+            'open time premium',
+            'junior assignment premium',
+            'monthly pay guarantee',
+        ]
+    }
+}
+
+def find_force_include_chunks(question_lower, all_chunks):
+    """Find chunks that MUST be included based on question topic."""
+    forced = []
+    for rule_name, rule in FORCE_INCLUDE_RULES.items():
+        # Check if any trigger keyword matches
+        if any(kw in question_lower for kw in rule['trigger_keywords']):
+            # Find chunks containing the must-include phrases
+            for chunk in all_chunks:
+                chunk_text_lower = chunk['text'].lower()
+                for phrase in rule['must_include_phrases']:
+                    if phrase in chunk_text_lower:
+                        if chunk not in forced:
+                            forced.append(chunk)
+                        break  # One match per chunk is enough
+    return forced
+
 def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
     question_embedding = get_embedding_cached(question, openai_client)
+    question_lower = question.lower()
 
+    # Step 1: Find force-include chunks for this question topic
+    forced_chunks = find_force_include_chunks(question_lower, chunks)
+
+    # Step 2: Normal embedding search
     similarities = []
     for i, chunk_embedding in enumerate(embeddings):
         score = cosine_similarity(question_embedding, chunk_embedding)
         similarities.append((score, chunks[i]))
 
     similarities.sort(reverse=True, key=lambda x: x[0])
-    return [chunk for score, chunk in similarities[:max_chunks]]
+    embedding_chunks = [chunk for score, chunk in similarities[:max_chunks]]
+
+    # Step 3: Merge - forced chunks first, then fill remaining from embedding results
+    # Deduplicate by chunk id
+    seen_ids = set()
+    merged = []
+
+    # Add forced chunks first (these are critical and must always be present)
+    for chunk in forced_chunks:
+        chunk_id = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
+        if chunk_id not in seen_ids:
+            seen_ids.add(chunk_id)
+            merged.append(chunk)
+
+    # Fill remaining slots with embedding results
+    for chunk in embedding_chunks:
+        chunk_id = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
+        if chunk_id not in seen_ids:
+            seen_ids.add(chunk_id)
+            merged.append(chunk)
+            if len(merged) >= max_chunks:
+                break
+
+    return merged
 
 # ============================================================
 # API CALL (only runs on cache miss)
 # ============================================================
 def _ask_question_api(question, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name):
-    """Does the actual API call. Only called when no cache hit."""
     start_time = time.time()
 
-    # Detect question type to determine how many chunks to pull
     pay_keywords = ['pay', 'rate', 'hourly', 'salary', 'wage', 'compensation', 'earning', 'make per hour', 'dpg', 'scale', 'duty rig', 'trip rig', 'pch']
     scheduling_keywords = ['day off', 'days off', 'rest period', 'rest requirement', 'schedule', 'line construction', 'composite line', 'regular line', 'reserve line', 'bid line', 'workday', 'work day', 'consecutive days', 'week off', 'time off', 'duty free']
 
@@ -166,7 +236,6 @@ def _ask_question_api(question, chunks, embeddings, openai_client, anthropic_cli
 
     context = "\n\n---\n\n".join(context_parts)
 
-    # System prompt - CACHED by Anthropic after first call (1024+ tokens required)
     system_prompt = f"""You are a neutral contract reference tool for the {airline_name} pilot union contract (JCBA). Your role is to provide accurate, unbiased contract analysis based solely on the contract language provided to you.
 
 SCOPE LIMITATION:
@@ -295,15 +364,9 @@ Answer:"""
     return answer, status, response_time
 
 # ============================================================
-# MAIN ENTRY POINT - checks caches before calling API
+# MAIN ENTRY POINT
 # ============================================================
 def ask_question(question, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name):
-    """
-    Three-layer cache:
-    1. Normalize question (fixes typos, caps, extra spaces)
-    2. Semantic similarity (catches different wording, same meaning)
-    3. API call (only on full cache miss, result stored for future hits)
-    """
     normalized = question.strip().lower()
 
     question_embedding = get_embedding_cached(normalized, openai_client)
@@ -331,7 +394,6 @@ if 'conversation' not in st.session_state:
 if 'selected_contract' not in st.session_state:
     st.session_state.selected_contract = None
 
-# Simple authentication (beta version)
 if not st.session_state.authenticated:
     st.title("✈️ AskTheContract - Beta Access")
     st.write("**AI-Powered Contract Q&A for Pilots**")
@@ -348,11 +410,9 @@ if not st.session_state.authenticated:
     st.info("🔒 This is a beta test version.")
 
 else:
-    # Main app
     st.title("✈️ AskTheContract")
     st.caption("AI-Powered Contract Q&A System")
 
-    # Sidebar
     with st.sidebar:
         st.header("Contract Selection")
 
@@ -394,13 +454,10 @@ else:
             st.session_state.authenticated = False
             st.rerun()
 
-    # Main content
     st.write("---")
 
-    # Scope notice - dynamic airline name
     st.info(f"📋 This tool searches **only** the **{airline_name} Pilot Contract (JCBA)**. It does not cover FAA regulations (FARs), Company Operations Manuals, or other policies.")
 
-    # Question input in a form (clears after submit)
     with st.form(key="question_form", clear_on_submit=True):
         question = st.text_input(
             "Ask a question about your contract:",
@@ -435,7 +492,6 @@ else:
                 'status': status
             })
 
-    # Display conversation
     if st.session_state.conversation:
         st.write("---")
         st.subheader("Conversation History")
@@ -453,5 +509,4 @@ else:
 
                 st.write("---")
 
-    # Footer
     st.caption("⚠️ **Disclaimer:** This tool searches only the pilot union contract (JCBA). It does not cover FAA regulations, company manuals, or other policies. This is not legal advice. Verify all answers against the actual contract and consult your union representative for guidance on disputes.")
