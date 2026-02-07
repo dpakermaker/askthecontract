@@ -5,6 +5,7 @@ from openai import OpenAI
 from anthropic import Anthropic
 import time
 import sys
+import threading
 from pathlib import Path
 
 # Add app directory to path
@@ -20,10 +21,61 @@ st.set_page_config(
     layout="wide"
 )
 
+# ============================================================
+# SEMANTIC SIMILARITY CACHE
+# Shared across all users. If a new question is 96%+ similar
+# in meaning to a previously asked question, returns the
+# saved answer instead of calling the API again.
+# ============================================================
+class SemanticCache:
+    SIMILARITY_THRESHOLD = 0.96
+    MAX_ENTRIES = 500
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._entries = {}  # key: contract_id -> list of (embedding, question, answer, status, response_time)
+
+    def lookup(self, embedding, contract_id):
+        """Check if a similar question was already answered for this contract."""
+        with self._lock:
+            entries = self._entries.get(contract_id, [])
+            for cached_emb, cached_q, cached_answer, cached_status, cached_time in entries:
+                score = np.dot(embedding, cached_emb) / (
+                    np.linalg.norm(embedding) * np.linalg.norm(cached_emb)
+                )
+                if score > self.SIMILARITY_THRESHOLD:
+                    return cached_answer, cached_status, cached_time
+        return None
+
+    def store(self, embedding, question, answer, status, response_time, contract_id):
+        """Save a new answer for future similar questions."""
+        with self._lock:
+            if contract_id not in self._entries:
+                self._entries[contract_id] = []
+            entries = self._entries[contract_id]
+            if len(entries) >= self.MAX_ENTRIES:
+                entries.pop(0)
+            entries.append((embedding, question, answer, status, response_time))
+
+    def clear(self, contract_id=None):
+        """Clear entries. If contract_id given, only clear that contract."""
+        with self._lock:
+            if contract_id:
+                self._entries.pop(contract_id, None)
+            else:
+                self._entries = {}
+
+@st.cache_resource
+def get_semantic_cache():
+    return SemanticCache()
+
+# ============================================================
+# STANDARD INIT FUNCTIONS
+# ============================================================
+
 # Load API keys
 @st.cache_resource
 def load_api_keys():
-    # Try to load from Streamlit secrets (cloud deployment)
     try:
         keys = {
             'openai': st.secrets["OPENAI_API_KEY"],
@@ -31,7 +83,6 @@ def load_api_keys():
         }
         return keys
     except:
-        # Fall back to local file (local development)
         keys = {}
         with open('api_key.txt', 'r') as f:
             for line in f:
@@ -41,7 +92,6 @@ def load_api_keys():
                     keys['anthropic'] = line.strip().split('=')[1]
         return keys
 
-# Initialize clients
 @st.cache_resource
 def init_clients():
     keys = load_api_keys()
@@ -49,17 +99,14 @@ def init_clients():
     anthropic_client = Anthropic(api_key=keys['anthropic'])
     return openai_client, anthropic_client
 
-# Initialize contract manager
 @st.cache_resource
 def init_contract_manager():
     return ContractManager()
 
-# Initialize logger
 @st.cache_resource
 def init_logger():
     return ContractLogger()
 
-# Load contract data
 @st.cache_resource
 def load_contract(contract_id):
     manager = init_contract_manager()
@@ -79,21 +126,21 @@ def get_embedding_cached(question_text, _openai_client):
     return response.data[0].embedding
 
 def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
-    # Use cached embedding so same question always gets same chunks
     question_embedding = get_embedding_cached(question, openai_client)
 
-    # Find similar chunks
     similarities = []
     for i, chunk_embedding in enumerate(embeddings):
         score = cosine_similarity(question_embedding, chunk_embedding)
         similarities.append((score, chunks[i]))
 
-    # Sort and get top chunks
     similarities.sort(reverse=True, key=lambda x: x[0])
     return [chunk for score, chunk in similarities[:max_chunks]]
 
-def _ask_question_api(question, chunks, embeddings, openai_client, anthropic_client, contract_id):
-    """Does the actual API call. Called by the cached wrapper."""
+# ============================================================
+# API CALL (only runs on cache miss)
+# ============================================================
+def _ask_question_api(question, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name):
+    """Does the actual API call. Only called when no cache hit."""
     start_time = time.time()
 
     # Detect question type to determine how many chunks to pull
@@ -109,10 +156,8 @@ def _ask_question_api(question, chunks, embeddings, openai_client, anthropic_cli
     else:
         max_chunks = 75
 
-    # Search for relevant chunks
     relevant_chunks = search_contract(question, chunks, embeddings, openai_client, max_chunks=max_chunks)
 
-    # Build context
     context_parts = []
     for chunk in relevant_chunks:
         section_info = chunk.get('section', 'Unknown Section')
@@ -122,7 +167,16 @@ def _ask_question_api(question, chunks, embeddings, openai_client, anthropic_cli
     context = "\n\n---\n\n".join(context_parts)
 
     # System prompt - CACHED by Anthropic after first call (1024+ tokens required)
-    system_prompt = """You are a neutral contract reference tool for the Northern Air Cargo (NAC) pilot union contract. This is a 396-page Joint Collective Bargaining Agreement (JCBA) between Northern Air Cargo and its pilots. Your role is to provide accurate, unbiased contract analysis based solely on the contract language provided to you.
+    system_prompt = f"""You are a neutral contract reference tool for the {airline_name} pilot union contract (JCBA). Your role is to provide accurate, unbiased contract analysis based solely on the contract language provided to you.
+
+SCOPE LIMITATION:
+This tool ONLY searches the {airline_name} pilot union contract (JCBA). It does NOT have access to:
+- FAA regulations or Federal Aviation Regulations (FARs)
+- Company Operations Manuals or Standard Operating Procedures (SOPs)
+- Company policies, memos, or bulletins
+- Other labor agreements or side letters not included in the JCBA
+- State or federal employment laws
+If a question appears to be about any of these sources, clearly state: "This tool only searches the {airline_name} pilot contract (JCBA) and cannot answer questions about FAA regulations, company manuals, or other policies outside the contract."
 
 CORE PRINCIPLES:
 1. Quote exact contract language - always use the precise wording from the contract
@@ -136,7 +190,7 @@ CORE PRINCIPLES:
 ANALYSIS RULES:
 - Read ALL provided contract sections before forming your answer
 - Look for provisions that may apply from different sections (pay, scheduling, reserve, hours of service, etc.)
-- Check for defined terms - many words have specific contract definitions in Section 14 (Definitions)
+- Check for defined terms - many words have specific contract definitions
 - Pay attention to qualifiers like "shall", "may", "except", "unless", "notwithstanding", "provided"
 - Note the difference between "scheduled" vs "actual" and "assigned" vs "awarded"
 - Distinguish between different pilot categories: Regular Line holders, Reserve pilots (R-1, R-2, R-3, R-4), Composite Line holders, TDY pilots, Domicile Flex Line holders
@@ -207,7 +261,6 @@ IMPORTANT REMINDERS:
 - When provisions from multiple sections are relevant, cite all of them
 - Be thorough but concise - pilots need clear, actionable information"""
 
-    # User message - changes every query (contract chunks + question)
     user_content = f"""CONTRACT SECTIONS:
 {context}
 
@@ -215,7 +268,6 @@ QUESTION: {question}
 
 Answer:"""
 
-    # API call with prompt caching on the system prompt
     message = anthropic_client.messages.create(
         model="claude-sonnet-4-20250514",
         max_tokens=2000,
@@ -233,7 +285,6 @@ Answer:"""
     answer = message.content[0].text
     response_time = time.time() - start_time
 
-    # Determine status
     if '🔵 STATUS: CLEAR' in answer:
         status = 'CLEAR'
     elif '🔵 STATUS: AMBIGUOUS' in answer:
@@ -243,17 +294,36 @@ Answer:"""
 
     return answer, status, response_time
 
-# ANSWER CACHE - same question returns saved answer, zero API calls
-@st.cache_data(ttl=86400, show_spinner=False)
-def ask_question_cached(question, contract_id, _chunks, _embeddings, _openai_client, _anthropic_client):
-    """Cached wrapper. Same question + same contract = saved answer returned instantly."""
-    return _ask_question_api(question, _chunks, _embeddings, _openai_client, _anthropic_client, contract_id)
+# ============================================================
+# MAIN ENTRY POINT - checks caches before calling API
+# ============================================================
+def ask_question(question, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name):
+    """
+    Three-layer cache:
+    1. Normalize question (fixes typos, caps, extra spaces)
+    2. Semantic similarity (catches different wording, same meaning)
+    3. API call (only on full cache miss, result stored for future hits)
+    """
+    normalized = question.strip().lower()
 
-def ask_question(question, chunks, embeddings, openai_client, anthropic_client, contract_id):
-    """Main entry point. Routes through cache."""
-    return ask_question_cached(question, contract_id, chunks, embeddings, openai_client, anthropic_client)
+    question_embedding = get_embedding_cached(normalized, openai_client)
 
-# Initialize session state
+    semantic_cache = get_semantic_cache()
+    cached_result = semantic_cache.lookup(question_embedding, contract_id)
+    if cached_result is not None:
+        return cached_result
+
+    answer, status, response_time = _ask_question_api(
+        normalized, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name
+    )
+
+    semantic_cache.store(question_embedding, normalized, answer, status, response_time, contract_id)
+
+    return answer, status, response_time
+
+# ============================================================
+# SESSION STATE
+# ============================================================
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 if 'conversation' not in st.session_state:
@@ -269,13 +339,13 @@ if not st.session_state.authenticated:
     password = st.text_input("Enter beta password:", type="password")
 
     if st.button("Login"):
-        if password == "nacpilot2026":  # Simple password for beta
+        if password == "nacpilot2026":
             st.session_state.authenticated = True
             st.rerun()
         else:
             st.error("Incorrect password. Contact the developer for access.")
 
-    st.info("🔒 This is a beta test version for Northern Air Cargo pilots.")
+    st.info("🔒 This is a beta test version.")
 
 else:
     # Main app
@@ -301,21 +371,19 @@ else:
 
         selected_contract_id = contract_options[selected_name]
 
-        # Load contract if changed
         if st.session_state.selected_contract != selected_contract_id:
             st.session_state.selected_contract = selected_contract_id
             st.session_state.conversation = []
 
-        # Show contract info
         contract_info = manager.get_contract_info(selected_contract_id)
+        airline_name = contract_info['airline_name']
+
         st.info(f"""
-        **{contract_info['airline_name']}**
+        **{airline_name}**
 
         📄 Pages: {contract_info['total_pages']}
 
         📅 Version: {contract_info['contract_version']}
-
-        ✈️ Aircraft: {contract_info.get('b737_cola', 'N/A')}
         """)
 
         if st.button("Clear Conversation"):
@@ -329,6 +397,9 @@ else:
     # Main content
     st.write("---")
 
+    # Scope notice - dynamic airline name
+    st.info(f"📋 This tool searches **only** the **{airline_name} Pilot Contract (JCBA)**. It does not cover FAA regulations (FARs), Company Operations Manuals, or other policies.")
+
     # Question input in a form (clears after submit)
     with st.form(key="question_form", clear_on_submit=True):
         question = st.text_input(
@@ -339,20 +410,16 @@ else:
 
     if submit_button and question:
         with st.spinner("Searching contract and generating answer..."):
-            # Load contract data
             chunks, embeddings = load_contract(st.session_state.selected_contract)
-
-            # Initialize clients
             openai_client, anthropic_client = init_clients()
 
-            # Get answer
             answer, status, response_time = ask_question(
                 question, chunks, embeddings,
                 openai_client, anthropic_client,
-                st.session_state.selected_contract
+                st.session_state.selected_contract,
+                airline_name
             )
 
-            # Log the question
             logger = init_logger()
             logger.log_question(
                 question_text=question,
@@ -362,7 +429,6 @@ else:
                 response_time=response_time
             )
 
-            # Add to conversation
             st.session_state.conversation.append({
                 'question': question,
                 'answer': answer,
@@ -378,7 +444,6 @@ else:
             with st.container():
                 st.write(f"**Q{len(st.session_state.conversation) - i}:** {qa['question']}")
 
-                # Color code based on status
                 if qa['status'] == 'CLEAR':
                     st.success(qa['answer'])
                 elif qa['status'] == 'AMBIGUOUS':
@@ -389,4 +454,4 @@ else:
                 st.write("---")
 
     # Footer
-    st.caption("⚠️ **Disclaimer:** This tool provides contract information only. It is not legal advice. Verify all answers against the actual contract and consult your union representative for guidance on disputes.")
+    st.caption("⚠️ **Disclaimer:** This tool searches only the pilot union contract (JCBA). It does not cover FAA regulations, company manuals, or other policies. This is not legal advice. Verify all answers against the actual contract and consult your union representative for guidance on disputes.")
