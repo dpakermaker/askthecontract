@@ -607,10 +607,14 @@ FORCE_INCLUDE_RULES = {
             'shall have at least two (2) separate periods of at least three (3) consecutive days off',
             'scheduled to have a minimum of one (1) day off during every seven (7) consecutive days of training',
             'minimum rest requirements for a pilot who is awarded a domicile flex line',
+            # Cross-reference: 0200 LDT rule for assignments into day off
+            'assignment may be scheduled up to 0200 local domicile time',
+            # Cross-reference: Day Off overtime pay conditions
+            'overtime premium',
         ]
     },
     'pay': {
-        'trigger_keywords': ['pay', 'rate', 'hourly', 'salary', 'wage', 'compensation', 'dpg', 'daily pay guarantee', 'duty rig', 'trip rig', 'pch', 'make per hour'],
+        'trigger_keywords': ['pay', 'rate', 'hourly', 'salary', 'wage', 'compensation', 'dpg', 'daily pay guarantee', 'duty rig', 'trip rig', 'pch', 'make per hour', 'overtime', '150%', '200%', '175%', 'premium'],
         'must_include_phrases': [
             'daily pay guarantee',
             'one (1) pch for every two (2) hours',
@@ -618,8 +622,129 @@ FORCE_INCLUDE_RULES = {
             'open time premium',
             'junior assignment premium',
             'monthly pay guarantee',
+            'overtime premium',
         ]
-    }
+    },
+    'reserve_day_off': {
+        'trigger_keywords': ['reserve', 'r-1', 'r-2', 'r-3', 'r-4', 'r1', 'r2', 'r3', 'r4', 'rap', 'fifo'],
+        'must_include_phrases': [
+            # 0200 LDT rule - assignments can go up to 0200 into day off
+            'assignment may be scheduled up to 0200 local domicile time',
+            # Reserve cannot be assigned conflicting with day off
+            'shall not be assigned a trip pairing or other company-directed',
+            # Auto-release from RAP
+            'has not assigned a pilot performing a rap to a trip pairing or other company-directed assignment within two (2) hours',
+            # Extension into day off for reserve
+            'if a reserve pilot departs his domicile and incurs a delay',
+            # 12-hour RAP max
+            'r-1 and r-2 rap shall not be scheduled to exceed twelve (12) hours',
+            # Duty time limits apply to reserve
+            'the duty time limitations and rest requirements for a pilot on a rap',
+        ]
+    },
+    'reserve_pay': {
+        'trigger_keywords': ['reserve pay', 'reserve compensation', 'rap pay', 'r-1 pay', 'r-2 pay', 'r1 pay', 'r2 pay'],
+        'must_include_phrases': [
+            'daily pay guarantee',
+            'one (1) pch for every two (2) hours',
+            'trip rig',
+            'overtime premium',
+            'a pilot who is scheduled for reserve or performs an assignment while on reserve shall be paid',
+        ]
+    },
+    'midnight_day_off': {
+        'trigger_keywords': ['midnight', 'past midnight', 'into day off', 'into his day', 'into a day off', 'work into', 'fly into', 'fly past', '0200', 'next day off', 'friday'],
+        'must_include_phrases': [
+            # THE key rule: 0200 LDT
+            'assignment may be scheduled up to 0200 local domicile time',
+            # Extension provisions
+            'extension procedures',
+            'extension shall not cause',
+            # Overtime premium conditions
+            'overtime premium',
+            'circumstances beyond the company',
+            # Reserve delay into day off
+            'if a reserve pilot departs his domicile and incurs a delay',
+        ]
+    },
+    'extension': {
+        'trigger_keywords': ['extension', 'extend', 'extended', 'kept past', 'held over', 'delayed past'],
+        'must_include_phrases': [
+            'extension procedures',
+            'extension shall not cause',
+            'overtime premium',
+            'a pilot shall not be extended more than one (1) time per month',
+        ]
+    },
+    'junior_assignment': {
+        'trigger_keywords': ['junior assignment', 'ja ', 'involuntary assign', 'involuntarily assigned', 'forced in', 'forced to work'],
+        'must_include_phrases': [
+            'junior assignment',
+            'a pilot performing a r-2 rap shall be available for ja at an international location',
+            'a pilot who is performing a r-1, r-3 or has been reassigned to an r-4 reserve assignment shall not be eligible to be junior assigned',
+            'junior assignment premium',
+            'no pilot may be involuntary assigned into a ja prior to forty-eight',
+            'a pilot shall not be subject to a ja without his consent when he is on vacation',
+            'under no circumstances shall the company involuntary assign a pilot to a ja for more than two (2) independent involuntary assignments in any rolling three (3) month',
+        ]
+    },
+    'fifo': {
+        'trigger_keywords': ['fifo', 'first in first out', 'first-in', 'first in, first out', 'who gets called first', 'assignment order', 'who flies first'],
+        'must_include_phrases': [
+            'first-in, first-out',
+            'inverse seniority order',
+            'shall rotate back to the bottom',
+            'highest positioned reserve pilot on the applicable fifo list',
+            'fifo list shall be published by 0900',
+        ]
+    },
+    'reassignment': {
+        'trigger_keywords': ['reassign', 'reassignment', 'reroute', 'rerouted', 'moved to different', 'changed trip', 'swap reserve'],
+        'must_include_phrases': [
+            'reassignment',
+            # Reserve reassignment MOU provisions
+            'a pilot who has r1 rap',
+            'shall not have them reassigned to another type of reserve',
+        ]
+    },
+    'shift_rap': {
+        'trigger_keywords': ['shift', 'shifted', 'move my rap', 'change my rap', 'change my dot', 'moved my reserve', 'moved earlier', 'moved later'],
+        'must_include_phrases': [
+            'shift',
+            'four (4) earlier or eight (8) hours later',
+            'minimum sixteen (16) hour notice',
+            'shall not be shifted into a scheduled day off',
+        ]
+    },
+    'contactability': {
+        'trigger_keywords': ['contact', 'contactable', 'phone', 'call back', 'return call', 'missed call', 'answer phone', 'respond to crew scheduling', 'initial call'],
+        'must_include_phrases': [
+            'must be contactable',
+            'return an initial call from crew scheduling within fifteen (15) minutes',
+            'contact crew scheduling within thirty (30) minutes',
+            'contactable during the entire time of his reserve',
+        ]
+    },
+    'line_construction': {
+        'trigger_keywords': ['line construction', 'bid line', 'regular line', 'composite line', 'reserve line', 'domicile flex', 'how lines are built', 'build the schedule', 'monthly bid'],
+        'must_include_phrases': [
+            'minimum scheduled days off in all constructed initial lines shall be thirteen',
+            'shall have at least two (2) separate periods of at least three (3) consecutive days off',
+            'no more than seventeen (17) scheduled workdays',
+            'all initial lines shall be constructed to be no greater than ninety-five (95) pch',
+            'regular line shall be scheduled with at least one (1) day off in any seven',
+            'r-3 reserve assignments shall not be scheduled onto regular lines',
+            'domicile flex lines shall be built with a minimum, single block of thirteen',
+        ]
+    },
+    'night_flying': {
+        'trigger_keywords': ['night trip', 'night flight', 'night flying', 'night pairing', 'red eye', 'stagger', 'no staggering'],
+        'must_include_phrases': [
+            'no more than four (4) consecutive night trip pairings',
+            'no staggering',
+            'the company shall schedule all night trip pairings consecutively',
+        ]
+    },
 }
 
 def find_force_include_chunks(question_lower, all_chunks):
@@ -670,8 +795,8 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
 def _ask_question_api(question, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name, conversation_history=None):
     start_time = time.time()
 
-    pay_keywords = ['pay', 'rate', 'hourly', 'salary', 'wage', 'compensation', 'earning', 'make per hour', 'dpg', 'scale', 'duty rig', 'trip rig', 'pch']
-    scheduling_keywords = ['day off', 'days off', 'rest period', 'rest requirement', 'schedule', 'line construction', 'composite line', 'regular line', 'reserve line', 'bid line', 'workday', 'work day', 'consecutive days', 'week off', 'time off', 'duty free', 'days a week', 'off per week', 'off a week']
+    pay_keywords = ['pay', 'rate', 'hourly', 'salary', 'wage', 'compensation', 'earning', 'make per hour', 'dpg', 'scale', 'duty rig', 'trip rig', 'pch', 'overtime', '150%', '200%', '175%', 'premium']
+    scheduling_keywords = ['day off', 'days off', 'rest period', 'rest requirement', 'schedule', 'line construction', 'composite line', 'regular line', 'reserve line', 'bid line', 'workday', 'work day', 'consecutive days', 'week off', 'time off', 'duty free', 'days a week', 'off per week', 'off a week', 'reserve', 'r-1', 'r-2', 'r-3', 'r-4', 'r1', 'r2', 'r3', 'r4', 'rap', 'fifo', 'junior assignment', 'extension', 'reassign']
 
     question_lower = question.lower()
     is_pay_question = any(keyword in question_lower for keyword in pay_keywords)
