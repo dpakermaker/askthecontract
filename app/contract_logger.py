@@ -1,11 +1,17 @@
 import sqlite3
 import hashlib
 import json
+import os
+import tempfile
 from datetime import datetime
 
 class ContractLogger:
     def __init__(self, db_path='database/contract_qa.db'):
-        self.db_path = db_path
+        # Streamlit Cloud is read-only - use temp directory
+        if os.path.exists("/mount/src"):
+            self.db_path = os.path.join(tempfile.gettempdir(), "contract_qa.db")
+        else:
+            self.db_path = db_path
         self.init_database()
     
     def init_database(self):

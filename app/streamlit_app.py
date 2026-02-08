@@ -852,6 +852,7 @@ ANALYSIS RULES:
 
 CURRENT PAY RATE GUIDANCE:
 The contract Date of Signing (DOS) is July 24, 2018. Per Section 3.B.3, Hourly Pay Rates increase by 2% annually on each anniversary of the DOS. As of February 2026, there have been 7 annual increases (July 2019 through July 2025). Therefore: CURRENT RATE = DOS rate from Appendix A × 1.02^7 (which equals × 1.14869). Always use the DOS column from Appendix A, multiply by 1.14869, and show your math. Example: Year 12 B737 Captain DOS rate $189.19 × 1.14869 = $217.33/hour.
+MANDATORY: If the Appendix A DOS rate appears in the provided contract sections, you MUST calculate and display the final dollar amount. If the pilot's longevity year is stated (e.g., "12 year captain"), look for that rate in Appendix A, apply the 1.14869 multiplier, and show the final pay in dollars. Do NOT say you cannot find the rate if a longevity year is provided — use the Appendix A data in the provided sections. If the specific rate truly does not appear in any provided section, use the example rate ($189.19 for Year 12 B737 Captain) and note it as an example.
 
 PAY QUESTION RULES:
 When the question involves pay or compensation, you MUST:
@@ -862,9 +863,25 @@ When the question involves pay or compensation, you MUST:
   * Trip Rig (TAFD): total TAFD hours divided by 4.9, multiplied by hourly rate
   * Scheduled PCH if provided in the scenario
   * Overtime Premium: PCH multiplied by hourly rate multiplied by 1.5
-- Show all math step by step
+- Show all math step by step — PCH values AND dollar amounts for EVERY calculation
 - Quote the contract language that defines each calculation
 - State which calculation the contract says applies, or if the contract does not specify
+- ALWAYS end pay analysis with a clear summary: "The pilot should be paid [X] PCH × $[rate] = $[total]"
+
+CRITICAL RESERVE PAY RULES:
+When calculating pay for a Reserve Pilot who is assigned a trip:
+- R-1 is DUTY (15.B.2.a). Duty time starts at the scheduled RAP DOT (Duty On Time), NOT when the flight departs or when the pilot was called. If an R-1 pilot has a RAP from noon to midnight and gets called at 3pm for a 6pm flight, his duty started at NOON.
+- R-2 is DUTY (15.B.3.b). Same principle — duty starts at RAP DOT.
+- For ANY scheduled trip, Duty begins 1 hour before the scheduled departure time. For reserve pilots, use whichever is EARLIER: the RAP DOT or 1 hour before flight departure.
+- For Duty Rig calculations, use the FULL duty period: from RAP DOT or 1 hour before departure (whichever is earlier) to actual release from duty (when the pilot is back and released, not when the flight lands).
+- If a reserve pilot works past the end of his scheduled RAP (e.g., past midnight into the next day), you MUST flag this as an extension issue and address ALL of the following:
+  * EXTENSION: State that the pilot was extended beyond his scheduled RAP. Cite Section 14.N extension provisions.
+  * DAY OFF IMPACT: Check whether the next day is a scheduled Day Off. If so, cite the 0200 LDT rule (15.A.7-8) — assignments may be scheduled up to 0200 LDT into a Day Off. If the pilot works past 0200, this is a potential contract violation.
+  * OVERTIME PREMIUM: Determine if overtime premium applies for work beyond scheduled duty or on a Day Off.
+  * SECOND WORKDAY: Determine if the work past midnight triggers a second Duty Period or Workday, which could mean additional DPG or other pay.
+  * Do NOT skip this analysis. Any time actual duty extends beyond the scheduled RAP end time, these provisions MUST be discussed.
+- Per Section 3.F.1.b, a Reserve Pilot receives the GREATER of: DPG, or the PCH earned from the assigned Trip Pairing (calculated per Section 3.E using block time, Duty Rig, or Trip Rig — whichever is greatest).
+- Always compare ALL applicable calculations (block PCH, Duty Rig, Trip Rig, DPG) and pay the GREATEST value.
 
 SCHEDULING AND REST QUESTION RULES:
 When the question involves days off, rest periods, scheduling, or duty limits:
@@ -973,21 +990,19 @@ Answer:"""
 def ask_question(question, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name, conversation_history=None):
     normalized = question.strip().lower()
 
-    if not conversation_history:
-        question_embedding = get_embedding_cached(normalized, openai_client)
-        semantic_cache = get_semantic_cache()
-        cached_result = semantic_cache.lookup(question_embedding, contract_id)
-        if cached_result is not None:
-            return cached_result
+    # Always check cache first — regardless of conversation history
+    question_embedding = get_embedding_cached(normalized, openai_client)
+    semantic_cache = get_semantic_cache()
+    cached_result = semantic_cache.lookup(question_embedding, contract_id)
+    if cached_result is not None:
+        return cached_result
 
     answer, status, response_time = _ask_question_api(
         normalized, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name, conversation_history
     )
 
-    if not conversation_history:
-        question_embedding = get_embedding_cached(normalized, openai_client)
-        semantic_cache = get_semantic_cache()
-        semantic_cache.store(question_embedding, normalized, answer, status, response_time, contract_id)
+    # Always store in cache
+    semantic_cache.store(question_embedding, normalized, answer, status, response_time, contract_id)
 
     return answer, status, response_time
 
@@ -1012,13 +1027,19 @@ if not st.session_state.authenticated:
     st.title("✈️ AskTheContract - Beta Access")
     st.write("**AI-Powered Contract Q&A for Pilots**")
 
-    password = st.text_input("Enter beta password:", type="password")
-    if st.button("Login"):
-        if password == "nacpilot2026":
-            st.session_state.authenticated = True
-            st.rerun()
-        else:
-            st.error("Incorrect password. Contact the developer for access.")
+    with st.form("login_form"):
+        password = st.text_input("Enter beta password:", type="password")
+        submitted = st.form_submit_button("Login", type="primary")
+        if submitted:
+            try:
+                correct_password = st.secrets["APP_PASSWORD"]
+            except:
+                correct_password = "nacpilot2026"
+            if password == correct_password:
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("Incorrect password. Contact the developer for access.")
     st.info("🔒 This is a beta test version.")
 
 # ============================================================
