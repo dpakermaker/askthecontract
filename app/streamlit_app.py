@@ -6,7 +6,10 @@ from anthropic import Anthropic
 import time
 import sys
 import threading
+import json
+import os
 from pathlib import Path
+from datetime import datetime
 
 # Add app directory to path
 sys.path.append(str(Path(__file__).parent))
@@ -20,6 +23,477 @@ st.set_page_config(
     page_icon="✈️",
     layout="wide"
 )
+
+# ============================================================
+# FEATURE 1: QUICK REFERENCE CARDS
+# Static content, zero API calls, loads instantly
+# ============================================================
+
+QUICK_REFERENCE_CARDS = {
+    "How to File a Grievance": {
+        "icon": "📋",
+        "content": """## How to File a Non-Disciplinary Grievance
+*Per Section 19.C of the JCBA (Pages 220-222)*
+
+There are two types of Grievances: Disciplinary (Section 19.B) and Non-Disciplinary (Section 19.C). Below is the Non-Disciplinary process — the most common type for pay, scheduling, and contract interpretation disputes.
+
+**Step 1: Attempt Informal Resolution — DEADLINE: 30 Days**
+Per Section 19.C.1: You or a Union Representative must first attempt to resolve the dispute informally with the Chief Pilot, or designee, via phone conversation, personal meeting, or email within **30 Days** after you became aware, or reasonably should have become aware, of the event.
+
+**Step 2: File a Written Grievance — DEADLINE: 20 Business Days after Step 1**
+Per Section 19.C.2: If not resolved informally, you or the Union may file a written Grievance within **20 Business Days** after the informal discussion. Per Section 19.C.2, the written request must include:
+- A statement of the known facts
+- The specific sections of the Agreement allegedly violated
+- The dates out of which the Grievance arose
+- A request for relief (what remedy you are seeking)
+
+File this with the **Director of Operations, or designee** (Section 19.C.2).
+
+**Step 3: Grievance Meeting — Within 10 Business Days**
+Per Section 19.C.3: A Grievance Meeting between the Grievant, Union, and Director of Operations (or designee) shall be held within **10 Business Days** after receipt of your written request. The meeting is telephonic unless the parties mutually agree to meet in person.
+
+**Step 4: Exchange Documents — At Least 1 Business Day Before Meeting**
+Per Section 19.C.4-5: Both sides must provide copies of any documents, witness statements, and records of how the Company has interpreted or applied the provision in dispute. Documents must be exchanged **at least 1 Business Day** before the Grievance Meeting.
+
+**Step 5: Company Decision — Within 10 Business Days After Meeting**
+Per Section 19.C.7: The Director of Operations, or designee, shall issue a **written decision** (including any relief granted) to you and the Union within **10 Business Days** after the Grievance Meeting.
+
+**Step 6: Appeal to System Board — DEADLINE: 20 Business Days**
+Per Section 19.B.20 / Section 20: If you or the Union are not satisfied with the Company's decision, the Union may make a **written appeal** to the NAC Pilots System Board of Adjustment within **20 Business Days** after receipt of the decision.
+
+---
+
+**⏰ CRITICAL DEADLINES — Missing any deadline forfeits your Grievance:**
+
+| Step | Action | Deadline |
+|------|--------|----------|
+| 1 | Informal resolution attempt | 30 Days from awareness |
+| 2 | File written Grievance | 20 Business Days after Step 1 |
+| 3 | Grievance Meeting held | 10 Business Days after filing |
+| 4 | Document exchange | 1 Business Day before meeting |
+| 5 | Company written decision | 10 Business Days after meeting |
+| 6 | Appeal to System Board | 20 Business Days after decision |
+
+Per Section 19.D.1: Time limits may be extended by **written agreement** between Company and Grievant or Union.
+
+Per Section 19.D.2: **Failure to file or advance any Grievance within the time periods prescribed shall result in the waiver and abandonment of the Grievance.**
+
+Per Section 19.D.3: All notifications, requests, and decisions shall be **in writing**.
+
+⚠️ **Contact your Union Representative (EXCO member) immediately when you identify a potential violation. Do not wait.**"""
+    },
+
+    "What is a Pay Discrepancy?": {
+        "icon": "💰",
+        "content": """## What is a Pay Discrepancy?
+
+A pay discrepancy occurs when your actual pay does not match what the contract says you should receive. Common examples:
+
+**Daily Pay Guarantee (DPG) Issues**
+- You were on duty but received less than 3.82 PCH for that workday
+- DPG was not applied when it should have been
+
+**Duty Rig Shortfalls**
+- Your duty day was long but you were only paid for block time
+- Duty Rig calculation: 1 PCH for every 2 hours on duty (1:2 ratio)
+- You should receive the GREATER of block time, DPG, or Duty Rig
+
+**Trip Rig (TAFD) Issues**
+- Time Away From Domicile was not calculated correctly
+- Trip Rig: Total TAFD hours ÷ 4.9
+
+**Overtime / Premium Pay**
+- Open Time Premium not applied (1.5x rate)
+- Junior Assignment Premium missing
+- Check Airman/Instructor/APD Day Off administrative pay (175%) not applied (Section 3.S.5.b)
+
+**Rate Issues**
+- Wrong longevity year applied
+- Annual 2% increase not reflected (per Section 3.B.3)
+- Wrong position rate (Captain vs First Officer)
+
+**What To Do:**
+1. Compare your pay stub to your actual schedule and duty times
+2. Calculate what you believe you are owed using the contract formulas
+3. Contact your union representative with your documentation
+4. File a pay grievance if the discrepancy is confirmed"""
+    },
+
+    "Reserve Types & Definitions": {
+        "icon": "🔄",
+        "content": """## Reserve Types & Definitions
+*Per Section 15 of the JCBA (Pages 190-200)*
+
+Reserve Assignments consist of four types (15.B.1): R-1, R-2, R-3, and R-4. The Company determines the number and types each Monthly Bid Period.
+
+---
+
+**R-1: Domicile Short Call Reserve (Section 15.B.2)**
+- R-1 is **Duty** (15.B.2.a)
+- Applies to **In-Domicile** reserve obligations only (15.B.2.b)
+- Scheduled DOT and Duty Off times published in Monthly Bid Package and constructed into Lines (15.B.2.c)
+- DOT and Duty Off may be scheduled differently from Day to Day (14.E.13.d)
+- **Max RAP duration: 12 hours** (15.A.3)
+- Must return Initial Call within **15 minutes** (15.A.8)
+- When assigned a trip: not required to report prior to **2 hours** after Initial Contact (15.B.2.d)
+- Crew Scheduling may shift RAP up to **4 hours earlier or 8 hours later** than scheduled DOT (15.A.11); minimum **16-hour notice** required (15.A.11.d)
+- RAP shall not be shifted into a scheduled Day Off (15.A.11.b)
+- First RAP in a block shall not be shifted earlier; last RAP in a block shall not be shifted later (15.A.11.a)
+- R-1 RAPs **shall not be Reassigned** to another type of Reserve Assignment (MOU, Page 384)
+- **NOT eligible for Junior Assignment** (14.O.14)
+- On the FIFO List for trip assignment (15.C.1.a)
+
+**R-2: Out-of-Domicile Short Call Reserve (Section 15.B.3)**
+- R-2 is **Duty** (15.B.3.b)
+- Applies to **Out-of-Domicile** reserve obligations (15.B.3.a)
+- Pilot shall be notified at least **10 hours** prior to next R-2 RAP DOT (15.B.3.c)
+- **Max RAP duration: 12 hours** (15.A.3)
+- Must return Initial Call within **15 minutes** (15.A.8)
+- When assigned a trip: must report within **1 hour** of Initial Call; or be available for Company transportation within **1 hour** of Initial Contact (15.B.3.d)
+- Must receive at least one **24-hour Rest Period** free from all Duty within any **7 consecutive days** (15.B.3.e)
+- Crew Scheduling may shift RAP up to **4 hours earlier or 8 hours later** (15.A.11); minimum **16-hour notice** (15.A.11.d)
+- When R-2 RAPs are scheduled in blocks, a minimum of **5 consecutive Days Off** in Domicile shall follow each block (14.E.13.g)
+- R-2 Lines shall be constructed with **purely R-2 RAPs**, except when an R-2 RAP is scheduled within a Trip Pairing (14.E.13.c)
+- May be Reassigned from **any location** to cover unassigned flying when no R-1 is available (15.C.2.a.(2))
+- **Eligible for Junior Assignment at International locations ONLY** (14.O.14)
+- On the FIFO List for trip assignment (15.C.1.a)
+
+**R-3: Long Call Reserve (Section 15.B.4)**
+- **No Duty Time Limitations** while performing R-3; once assigned a trip, Section 13 (Hours of Service) applies (15.B.4.a)
+- Scheduled **0000-2359 Local Time**, except when in Rest or released (15.B.4.b)
+- Must advise Crew Scheduling of **Residence Airport** prior to beginning of that Month (15.B.4.c); Residence Airport must be near Primary Residence with more than one FAR Part 121 carrier serving it
+- Must contact Crew Scheduling within **30 minutes** of Initial Call (15.B.4.h.(4))
+- Contactable via personal phone with voicemail OR Company-approved PCD (15.B.4.h)
+- When assigned a trip **NOT at Domicile**: put into Rest, minimum **12 hours** to report; Duty begins 1 hour before scheduled departure; **Company pays airfare** (15.B.4.e)
+- When assigned a trip **at Domicile**: pilot responsible for own travel and costs; Duty On no earlier than **12 hours** from Initial Call (15.B.4.f)
+- Must receive at least one **24-hour Rest Period** free from all Duty within any **7 consecutive days** (15.B.4.i)
+- R-3 shall **NOT be scheduled onto Regular Lines** (14.E.5.g)
+- **NOT eligible for Junior Assignment** (14.O.14)
+- **NOT on the R-1/R-2 FIFO List** (15.C.1.a — FIFO Lists consist of R-1 and R-2 only)
+
+**R-4: Airport Reserve (Section 15.B.5)**
+- R-4 is **Duty** (15.B.5.b)
+- Performed at Pilot's **Domicile or another designated Airport/location** selected by the Company (15.B.5.a)
+- A Pilot on R-1 or R-2 **may be Reassigned** to R-4 (15.B.5.c)
+- When Reassigned **before** RAP DOT: R-4 shall not exceed **4 consecutive hours**; if not assigned a trip, released from all Duty for that Day (15.B.5.c)
+- When Reassigned **during** an R-1 or R-2 RAP: must report to airport per R-1 (15.B.2.d) or R-2 (15.B.3.d) rules; R-4 shall not exceed **4 hours**; if not assigned, released for the Day (15.B.5.d)
+- **NOT eligible for Junior Assignment** (14.O.14)
+
+---
+
+**FIFO — First In, First Out (Section 15.C)**
+- Separate FIFO Lists for each **Position and Domicile**, consisting of **R-1 and R-2 Pilots only** (15.C.1.a)
+- Lists sorted in **numerical order** (15.C.1.a)
+- Initial placement: **inverse Seniority Order** — most junior Pilot is first (top) on list (15.C.1.b.(1))
+- Single-Day Reserve Pilots placed on FIFO in same manner for each Reserve Day (15.C.1.b.(1))
+- After completing an assignment: rotates to **bottom** of FIFO List (15.C.1.b.(2))
+- When two Pilots have same Duty Off Time: more **junior** Pilot is higher on FIFO (15.C.1.b.(3))
+- When Deadheading Pilot and Flying Pilot have same Duty Off Time: **Flying Pilot** is higher (15.C.1.b.(4))
+- Pilot stays at top of FIFO until: assigned and reports for duty, has a Day Off, or changes FIFO List (15.C.1.c)
+- Each time a Pilot returns from a **Day Off**: goes to **bottom** of FIFO List (15.C.1.d)
+- Assignments go to **highest positioned** Pilot who is legal to accept (15.C.2)
+- FIFO Lists published by **0900 LDT each Day**, updated within **1 hour** of each change, showing through next Day (15.C.1.e)
+- All FIFO Lists available on **Company Intranet** (15.C.1.e)
+
+---
+
+**General Reserve Rules (Section 15.A)**
+- Reserve covers unanticipated absences: illness, fatigue, emergency leave, charters, ferry flights, IROP, route changes, Open Time (15.A.1)
+- Pilot may request release from RAP within **4 hours** of Duty Off Time if not assigned (15.A.4)
+- If not assigned within **2 hours** of Duty Off Time: **automatically released** (15.A.4)
+- Assignment shall **not conflict** with a scheduled Day Off, except may be scheduled up to **0200 LDT** into a Day Off (15.A.7-8)
+- Upon completing an assignment, Reserve Pilot **immediately goes into Rest** before next assignment (15.A.10)
+- If delay causes work into Day Off, **Extension provisions** in Section 14 control (15.A.9)
+- Reserve pay per **Section 3 (Compensation)** (15.E)
+
+---
+
+**Contactability (Section 15.D)**
+- Must be contactable during **entire time** of Reserve (15.D.2)
+- Contact methods: personal phone with voicemail; when on R-2, hotel/lodging number; Company-approved PCD (15.D.1)
+- Must ensure Crew Scheduling has **accurate contact info**; inform of changes before next DOT (15.D.3)
+
+**Key Definitions:**
+- **RAP** = Reserve Availability Period (the hours you must be available)
+- **DOT** = Duty On Time
+- **Day Off** = A scheduled day free of ALL Duty at Domicile (00:00-23:59 Local) — this is a defined term
+- **Rest Period** = Minimum consecutive hours free from Duty between assignments — NOT the same as a Day Off
+- **Initial Call** = First contact from Crew Scheduling for an assignment
+- **Positive Contact** = Direct communication confirmed between Pilot and Crew Scheduling (phone, text, or email)
+
+⚠️ *Also see MOU on Reserve Reassignment (Pages 383-385) for rules on reassignment between reserve types.*"""
+    },
+
+    "Minimum Days Off / Availability": {
+        "icon": "📅",
+        "content": """## Minimum Days Off, Scheduling & Line Construction Rules
+*Per Section 14.E (LOA #15, Pages 326-349) and Section 15 of the JCBA*
+
+---
+
+### LINE CONSTRUCTION PARAMETERS (14.E.2)
+
+**Maximum Scheduled Workdays Per Month (14.E.2.c)**
+- All Lines (Regular, Composite, Reserve, Domicile Flex): **17 Workdays max**
+- TDY Lines: **18 Workdays max** (including Deadhead to/from TDY location) (14.E.3)
+
+**Minimum Monthly Days Off (14.E.2.d)**
+- **30-day month: 13 Days Off minimum**
+- **31-day month: 14 Days Off minimum**
+- Applies to ALL line types (Regular, Composite, Reserve, Domicile Flex)
+- TDY Lines: **12 Days Off** (30-day month), **13 Days Off** (31-day month) (14.E.3.d)
+
+**Days Off Structure (14.E.2.b)**
+All Regular, Composite, Reserve, and Domicile Flex Lines must have EITHER:
+- Two (2) separate periods of at least **3 consecutive Days Off**, OR
+- One single block of at least **5 consecutive Days Off**
+
+**All scheduled Days Off** in published Initial and Final Line awards shall be scheduled **in the Pilot's Domicile** (14.E.2.e)
+
+**Maximum Line Value: 95 PCH** — no Line shall exceed this (14.E.2.f)
+
+---
+
+### WEEKLY MINIMUMS (1 Day Off / Rest Period per 7 Days)
+
+| Line Type | Requirement | Citation |
+|-----------|-------------|----------|
+| Regular Line | At least 1 Day Off in any 7 consecutive days | 14.E.5.a (LOA #15) |
+| Composite Line | At least 1 Day Off in any 7 consecutive days | 14.E.7.d (LOA #15) |
+| Reserve (R-2) | At least one 24-hour Rest Period free from all Duty within any 7 consecutive days | 15.B.3.e |
+| Reserve (R-3) | At least one 24-hour Rest Period free from all Duty within any 7 consecutive days | 15.B.4.i |
+| Domicile Flex Line | A scheduled consecutive 24-hour period free from all Duty within a 7 consecutive Day period | 14.E.9.h (LOA #15) |
+| Training (15+ days) | At least 1 Day Off during every 7 consecutive days of Training; no more than 5 consecutive days with scheduled Simulator Periods | 12.G.g |
+
+---
+
+### LINE-SPECIFIC CONSTRUCTION RULES
+
+**Regular Lines (14.E.5, LOA #15)**
+- Company shall construct **maximum number** of Regular Lines per Position (14.E.5.a)
+- Regular Lines constructed **first** from Known Flying, with highest PCH Trip Pairings (14.E.2.g)
+- A planned sequence of Trip Pairings, with or without a **limited number of R-1 or R-2 RAPs** (max 6 RAPs) (14.E.5.b)
+- "Pure Lines" (Trip Pairings only) shall be constructed to the extent possible (14.E.5.b)
+- All Days Off shall be at **Domicile** (14.E.5.c)
+- All Trip Pairings shall **begin and end at Domicile** (14.E.5.d)
+- To the extent possible, **no single Days Off** during the Month, except first or last Day (14.E.5.e)
+- Consistent weekly work patterns and report times to the extent possible (14.E.5.f)
+- R-3 shall **NOT** be scheduled onto Regular Lines (14.E.5.g)
+- Night Trip Pairings scheduled **consecutively**; max **4 consecutive** Night Trips without 2 Days Off; **no staggering** (14.E.5.g/h)
+
+**Composite Lines (14.E.7, LOA #15)**
+- Blank when published; constructed **after SAP** (14.E.7.a)
+- Combination of: Trip Pairings, Reserve Duty, Vacation, Training, Company-Directed Assignments, Days Off (14.E.7.c)
+- At least 1 Day Off in any 7 consecutive Days (14.E.7.d)
+- No less than Minimum Days Off in a Month (14.E.7.e)
+- To the extent possible, **at least 2 Days Off** shall separate blocks of Trip Pairings (14.E.7.f)
+
+**Reserve Lines (14.E.8, LOA #15)**
+- Shall contain **only Reserve Assignments** (14.E.8.a)
+- Types: R-1 RAP, R-2 RAP, R-3 (14.E.8.a)
+- To the extent possible, each Reserve Line built with **only one type** (R-1 only or R-3 only); may mix R-1 and R-3 blocks if each block is same type (14.E.8.b)
+- R-2 Lines: **purely R-2 RAPs** except when R-2 is within a Trip Pairing (14.E.8.c)
+- Single-Day Reserve limited to **first or last Day** of Month (14.E.8.f)
+- R-2 blocks: minimum **5 consecutive Days Off** in Domicile after each block (14.E.8.g)
+
+**Domicile Flex Lines (14.E.9, LOA #15)**
+- Minimum single block of **13 consecutive Days Off** (30-day month) or **14 consecutive Days Off** (31-day month) (14.E.9.b)
+- All Workdays shall be **R-1 Reserve Assignments** (14.E.9.c)
+- Created from Reserve Lines: if 3+ Reserve Lines are constructed, **50%** (rounded up) shall be Domicile Flex Lines for requesting Pilots (14.E.2.j)
+- Minimum rest: scheduled consecutive **24-hour period** free from all Duty within 7 Days (14.E.9.h)
+- Pilots must **request** a Domicile Flex Line during Training Bid Period (14.E.9.d)
+
+**TDY Lines (14.E.3, LOA #15)**
+- Max **18 Workdays** per Month (14.E.3.c)
+- Min Days Off: **12** (30-day month), **13** (31-day month) (14.E.3.d)
+- All Workdays scheduled **consecutively** (14.E.3.a via original 14.E.4)
+- Days Off scheduled inside a consecutive block of TDY Workdays are **NOT considered a Day Off** for minimum Days Off purposes (14.E.3, original 14.E.5)
+- At least 50% of TDY Lines begin and end in same Month (14.E.3.e)
+
+---
+
+### TRAINING DAYS OFF (Section 12.G)
+- Training of **15+ days**: at least **1 Day Off** during every 7 consecutive days (12.G.g)
+- No more than **5 consecutive days** with scheduled Simulator Periods without a Day Off (12.G.g)
+- After completing Initial, Upgrade, or Transition Training: at least **2 Days** free of Duty at Domicile (unless Pilot agrees otherwise) (12.G.f)
+
+---
+
+### KEY DEFINITIONS
+- **Day Off** = A scheduled day free of ALL Duty at Domicile (00:00-23:59 Local) — this is a defined term
+- **Rest Period** = Minimum consecutive hours free from Duty between assignments — NOT a Day Off
+- **Workday** = A Day with scheduled Duty or Company-Directed Assignment
+- **MPG** = Monthly Pay Guarantee
+- **Known Flying** = All flight segments known at the start of the Monthly Bid Period
+
+⚠️ *Refer to LOA #15 (Pages 320-349) which supersedes original Section 14.E provisions. Also see Section 13 (Hours of Service) for Duty Time and Rest requirements.*"""
+    },
+
+    "What Evidence to Save": {
+        "icon": "📁",
+        "content": """## What Evidence to Save
+
+If you believe the contract has been violated, start saving evidence immediately. Do not wait.
+
+**Always Save These:**
+- ✅ Pay stubs (every month — compare to your actual schedule)
+- ✅ Published bid lines (Initial and Final Line Awards)
+- ✅ Trip pairings (before and after any changes)
+- ✅ Crew Scheduling communications (calls, emails, texts)
+- ✅ Schedule changes (screenshot before and after)
+- ✅ Duty times (actual vs scheduled)
+- ✅ Rest period records
+- ✅ FIFO list positions (screenshot from Company intranet)
+
+**For Pay Disputes:**
+- ✅ Block time records
+- ✅ Duty start and end times
+- ✅ TAFD (Time Away From Domicile) calculations
+- ✅ Open Time pickup confirmations
+- ✅ Junior Assignment notifications
+
+**For Scheduling Disputes:**
+- ✅ Original published line
+- ✅ Any reassignment notifications
+- ✅ Day Off records (were minimums met?)
+- ✅ Rest period calculations between assignments
+- ✅ Training schedule vs line schedule conflicts
+
+**For Reserve Disputes:**
+- ✅ RAP start/end times
+- ✅ Initial Call times and your response times
+- ✅ FIFO list at time of assignment
+- ✅ Whether proper FIFO order was followed
+
+**How to Save:**
+- Screenshot everything on your phone immediately
+- Forward emails to your personal email
+- Keep a simple log: Date | What Happened | Contract Section
+- Save files with dates in the filename (e.g., "2026-02-07_schedule_change.png")
+
+⚠️ **The Company's records can change. Your personal records are your protection.**"""
+    }
+}
+
+# ============================================================
+# FEATURE 2: CANONICAL QUESTION LABELS
+# Keyword matching only, no AI, no embeddings
+# ============================================================
+
+QUESTION_CATEGORIES = {
+    "Pay → Hourly Rate": ['hourly rate', 'pay rate', 'what do i make', 'how much do i make', 'rate of pay', 'longevity rate', 'current rate'],
+    "Pay → Daily Pay Guarantee": ['dpg', 'daily pay guarantee', 'minimum pay per day', 'daily guarantee'],
+    "Pay → Duty Rig": ['duty rig', 'duty day pay', '1:2'],
+    "Pay → Trip Rig / TAFD": ['trip rig', 'tafd', 'time away from domicile'],
+    "Pay → Overtime / Premium": ['overtime', 'open time premium', 'premium pay', 'time and a half'],
+    "Pay → Junior Assignment Premium": ['junior assignment premium', 'ja premium', 'ja pay'],
+    "Pay → General Calculation": ['pay', 'paid', 'compensation', 'wage', 'salary', 'earning', 'pch'],
+    "Reserve → Types & Definitions": ['reserve type', 'r-1', 'r-2', 'r-3', 'r-4', 'what is reserve'],
+    "Reserve → FIFO": ['fifo', 'first in first out', 'reserve order'],
+    "Reserve → Availability / RAP": ['reserve availability', 'rap', 'on call', 'call out'],
+    "Reserve → Day-Off Reassignment": ['reserve day off', 'called on day off', 'junior assigned', 'involuntary assign'],
+    "Scheduling → Days Off": ['day off', 'days off', 'time off', 'week off', 'off per week', 'off a week', 'days a week'],
+    "Scheduling → Rest Periods": ['rest period', 'rest requirement', 'minimum rest', 'duty free'],
+    "Scheduling → Line Construction": ['line construction', 'bid line', 'regular line', 'composite line', 'reserve line', 'domicile flex'],
+    "Scheduling → Reassignment": ['reassign', 'reassignment', 'schedule change'],
+    "Scheduling → Duty Limits": ['duty limit', 'duty time', 'max duty', 'maximum duty'],
+    "Training": ['training', 'upgrade', 'transition', 'simulator', 'check ride', 'recurrent'],
+    "Seniority": ['seniority', 'seniority list', 'seniority number', 'bid order'],
+    "Grievance": ['grievance', 'grieve', 'dispute', 'arbitration', 'system board'],
+    "TDY": ['tdy', 'temporary duty', 'tdy line'],
+    "Vacation / Leave": ['vacation', 'leave', 'sick leave', 'bereavement', 'military leave', 'fmla'],
+    "Benefits": ['insurance', 'health', 'medical', 'dental', 'retirement', '401k'],
+    "Furlough": ['furlough', 'recall', 'laid off', 'reduction'],
+}
+
+def classify_question(question_text):
+    """Classify by keyword matching. No AI, no embeddings."""
+    q_lower = question_text.lower()
+    best_match = None
+    best_count = 0
+    for category, keywords in QUESTION_CATEGORIES.items():
+        count = sum(1 for kw in keywords if kw in q_lower)
+        if count > best_count:
+            best_count = count
+            best_match = category
+    return best_match if best_match else "General Contract Question"
+
+# ============================================================
+# FEATURE 3: "WHAT WOULD CHANGE THIS ANSWER?"
+# Static pre-written text per category
+# ============================================================
+
+ANSWER_MODIFIERS = {
+    "Pay": """**Factors that could change this answer:**
+- Your line type (Regular, Composite, Reserve, TDY, Domicile Flex) may trigger different pay rules
+- Whether the duty was on a scheduled Day Off (175% premium may apply)
+- Whether this was an Open Time pickup (1.5x premium) or Junior Assignment (JA Premium)
+- Whether the trip involved international operations (different per diem)
+- Whether a Letter of Agreement (LOA) or MOU modifies the standard pay provision
+- Actual vs scheduled duty times may differ, changing Duty Rig calculations""",
+
+    "Reserve": """**Factors that could change this answer:**
+- Your reserve type (R-1, R-2, R-3, R-4) — each has different rules
+- Whether you were at Domicile or out-of-Domicile when contacted
+- Whether you were reassigned from one reserve type to another
+- Whether the assignment conflicts with a scheduled Day Off
+- Your position on the FIFO list
+- Whether a Letter of Agreement (LOA) or MOU modifies the provision""",
+
+    "Scheduling": """**Factors that could change this answer:**
+- Your line type (Regular, Composite, Reserve, TDY, Domicile Flex)
+- Whether circumstances were within or beyond the Company's control (IROP)
+- Whether you are at Domicile or out-of-Domicile
+- Whether the change is a Reassignment vs a voluntary trade/drop
+- Whether Training conflicts with your schedule
+- Whether a Letter of Agreement (LOA) or MOU modifies the provision""",
+
+    "Training": """**Factors that could change this answer:**
+- Training type: Initial, Upgrade, Transition, or Recurrent
+- Duration: Short-Term vs Long-Term (15+ days)
+- Location: at Domicile or away from Domicile
+- Whether training falls on a scheduled Day Off
+- Whether you are a Check Airman, Instructor, or line pilot""",
+
+    "General": """**Factors that could change this answer:**
+- Your line type and current duty status
+- Whether a Letter of Agreement (LOA) or MOU modifies the provision
+- Whether this involves domestic or international operations
+- Whether circumstances are within or beyond the Company's control
+- Your position (Captain vs First Officer) and seniority"""
+}
+
+def get_answer_modifier(category_label):
+    """Return static modifier text. No AI."""
+    if not category_label:
+        return ANSWER_MODIFIERS["General"]
+    for key in ANSWER_MODIFIERS:
+        if key.lower() in category_label.lower():
+            return ANSWER_MODIFIERS[key]
+    return ANSWER_MODIFIERS["General"]
+
+# ============================================================
+# FEATURE 4: ANSWER RATING
+# Logging only, no AI processing
+# ============================================================
+
+def log_rating(question_text, rating, comment=""):
+    """Log a rating to file. No AI."""
+    try:
+        log_dir = Path(__file__).parent.parent / "logs"
+        log_dir.mkdir(exist_ok=True)
+        rating_file = log_dir / "answer_ratings.jsonl"
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "question": question_text,
+            "rating": rating,
+            "comment": comment
+        }
+        with open(rating_file, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+        return True
+    except:
+        return False
 
 # ============================================================
 # SEMANTIC SIMILARITY CACHE
@@ -64,7 +538,7 @@ def get_semantic_cache():
     return SemanticCache()
 
 # ============================================================
-# STANDARD INIT FUNCTIONS
+# INIT FUNCTIONS
 # ============================================================
 
 @st.cache_resource
@@ -149,7 +623,6 @@ FORCE_INCLUDE_RULES = {
 }
 
 def find_force_include_chunks(question_lower, all_chunks):
-    """Find chunks that MUST be included based on question topic."""
     forced = []
     for rule_name, rule in FORCE_INCLUDE_RULES.items():
         if any(kw in question_lower for kw in rule['trigger_keywords']):
@@ -165,7 +638,6 @@ def find_force_include_chunks(question_lower, all_chunks):
 def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
     question_embedding = get_embedding_cached(question, openai_client)
     question_lower = question.lower()
-
     forced_chunks = find_force_include_chunks(question_lower, chunks)
 
     similarities = []
@@ -178,13 +650,11 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
 
     seen_ids = set()
     merged = []
-
     for chunk in forced_chunks:
         chunk_id = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
         if chunk_id not in seen_ids:
             seen_ids.add(chunk_id)
             merged.append(chunk)
-
     for chunk in embedding_chunks:
         chunk_id = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
         if chunk_id not in seen_ids:
@@ -192,13 +662,12 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
             merged.append(chunk)
             if len(merged) >= max_chunks:
                 break
-
     return merged
 
 # ============================================================
-# API CALL (only runs on cache miss)
+# API CALL
 # ============================================================
-def _ask_question_api(question, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name):
+def _ask_question_api(question, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name, conversation_history=None):
     start_time = time.time()
 
     pay_keywords = ['pay', 'rate', 'hourly', 'salary', 'wage', 'compensation', 'earning', 'make per hour', 'dpg', 'scale', 'duty rig', 'trip rig', 'pch']
@@ -234,6 +703,9 @@ This tool ONLY searches the {airline_name} pilot union contract (JCBA). It does 
 - State or federal employment laws
 If a question appears to be about any of these sources, clearly state: "This tool only searches the {airline_name} pilot contract (JCBA) and cannot answer questions about FAA regulations, company manuals, or other policies outside the contract."
 
+CONVERSATION CONTEXT:
+The user may ask follow-up questions that reference previous answers. When this happens, use the conversation history to understand what they are referring to. Maintain the same position (Captain or First Officer), aircraft type, and other parameters from the previous question unless the user explicitly changes them. For example, if the previous answer was about a B737 Captain and the user asks "what about year 12?" - recalculate using the Year 12 Captain rate for the same aircraft. Always provide a complete answer with full contract citations even for follow-up questions.
+
 CORE PRINCIPLES:
 1. Quote exact contract language - always use the precise wording from the contract
 2. Cite every quote with section number and page number
@@ -252,6 +724,9 @@ ANALYSIS RULES:
 - Distinguish between different pilot categories: Regular Line holders, Reserve pilots (R-1, R-2, R-3, R-4), Composite Line holders, TDY pilots, Domicile Flex Line holders
 - Distinguish between different types of assignments: Trip Pairings, Reserve Assignments, Company-Directed Assignments, Training, Deadhead
 - When a provision applies only to specific categories, state which categories clearly
+
+CURRENT PAY RATE GUIDANCE:
+The contract Date of Signing (DOS) is July 24, 2018. Per Section 3.B.3, Hourly Pay Rates increase by 2% annually on each anniversary of the DOS. As of February 2026, there have been 7 annual increases (July 2019 through July 2025). Therefore: CURRENT RATE = DOS rate from Appendix A × 1.02^7 (which equals × 1.14869). Always use the DOS column from Appendix A, multiply by 1.14869, and show your math. Example: Year 12 B737 Captain DOS rate $189.19 × 1.14869 = $217.33/hour.
 
 PAY QUESTION RULES:
 When the question involves pay or compensation, you MUST:
@@ -317,12 +792,29 @@ IMPORTANT REMINDERS:
 - When provisions from multiple sections are relevant, cite all of them
 - Be thorough but concise - pilots need clear, actionable information"""
 
+    messages = []
+
+    # Add last 3 Q&A pairs as conversation context (questions and answers only, no chunks)
+    if conversation_history:
+        recent = conversation_history[-3:]
+        for qa in recent:
+            messages.append({
+                "role": "user",
+                "content": f"PREVIOUS QUESTION: {qa['question']}"
+            })
+            messages.append({
+                "role": "assistant",
+                "content": qa['answer']
+            })
+
     user_content = f"""CONTRACT SECTIONS:
 {context}
 
 QUESTION: {question}
 
 Answer:"""
+
+    messages.append({"role": "user", "content": user_content})
 
     message = anthropic_client.messages.create(
         model="claude-sonnet-4-20250514",
@@ -335,7 +827,7 @@ Answer:"""
                 "cache_control": {"type": "ephemeral"}
             }
         ],
-        messages=[{"role": "user", "content": user_content}]
+        messages=messages
     )
 
     answer = message.content[0].text
@@ -351,23 +843,26 @@ Answer:"""
     return answer, status, response_time
 
 # ============================================================
-# MAIN ENTRY POINT
+# MAIN ENTRY
 # ============================================================
-def ask_question(question, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name):
+def ask_question(question, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name, conversation_history=None):
     normalized = question.strip().lower()
 
-    question_embedding = get_embedding_cached(normalized, openai_client)
-
-    semantic_cache = get_semantic_cache()
-    cached_result = semantic_cache.lookup(question_embedding, contract_id)
-    if cached_result is not None:
-        return cached_result
+    if not conversation_history:
+        question_embedding = get_embedding_cached(normalized, openai_client)
+        semantic_cache = get_semantic_cache()
+        cached_result = semantic_cache.lookup(question_embedding, contract_id)
+        if cached_result is not None:
+            return cached_result
 
     answer, status, response_time = _ask_question_api(
-        normalized, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name
+        normalized, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name, conversation_history
     )
 
-    semantic_cache.store(question_embedding, normalized, answer, status, response_time, contract_id)
+    if not conversation_history:
+        question_embedding = get_embedding_cached(normalized, openai_client)
+        semantic_cache = get_semantic_cache()
+        semantic_cache.store(question_embedding, normalized, answer, status, response_time, contract_id)
 
     return answer, status, response_time
 
@@ -380,29 +875,37 @@ if 'conversation' not in st.session_state:
     st.session_state.conversation = []
 if 'selected_contract' not in st.session_state:
     st.session_state.selected_contract = None
+if 'show_reference' not in st.session_state:
+    st.session_state.show_reference = None
+if 'ratings' not in st.session_state:
+    st.session_state.ratings = {}
 
+# ============================================================
+# LOGIN
+# ============================================================
 if not st.session_state.authenticated:
     st.title("✈️ AskTheContract - Beta Access")
     st.write("**AI-Powered Contract Q&A for Pilots**")
 
     password = st.text_input("Enter beta password:", type="password")
-
     if st.button("Login"):
         if password == "nacpilot2026":
             st.session_state.authenticated = True
             st.rerun()
         else:
             st.error("Incorrect password. Contact the developer for access.")
-
     st.info("🔒 This is a beta test version.")
 
+# ============================================================
+# MAIN APP
+# ============================================================
 else:
     st.title("✈️ AskTheContract")
     st.caption("AI-Powered Contract Q&A System")
 
+    # ---- SIDEBAR ----
     with st.sidebar:
         st.header("Contract Selection")
-
         manager = init_contract_manager()
         available_contracts = manager.get_available_contracts()
 
@@ -415,7 +918,6 @@ else:
             "Select your airline:",
             options=list(contract_options.keys())
         )
-
         selected_contract_id = contract_options[selected_name]
 
         if st.session_state.selected_contract != selected_contract_id:
@@ -433,18 +935,37 @@ else:
         📅 Version: {contract_info['contract_version']}
         """)
 
-        if st.button("Clear Conversation"):
-            st.session_state.conversation = []
-            st.rerun()
+        st.write("---")
 
-        if st.button("Logout"):
+        # FEATURE 1: Quick Reference Cards
+        st.subheader("📖 Quick Reference")
+        st.caption("Zero AI — loads instantly")
+        for card_name, card_data in QUICK_REFERENCE_CARDS.items():
+            if st.button(f"{card_data['icon']} {card_name}", key=f"ref_{card_name}", use_container_width=True):
+                st.session_state.show_reference = card_name
+
+        st.write("---")
+        if st.button("🗑️ Clear Conversation", use_container_width=True):
+            st.session_state.conversation = []
+            st.session_state.show_reference = None
+            st.rerun()
+        if st.button("🚪 Logout", use_container_width=True):
             st.session_state.authenticated = False
             st.rerun()
 
-    st.write("---")
-
+    # ---- MAIN CONTENT ----
     st.info(f"📋 This tool searches **only** the **{airline_name} Pilot Contract (JCBA)**. It does not cover FAA regulations (FARs), Company Operations Manuals, or other policies.")
 
+    # Show Quick Reference Card if selected
+    if st.session_state.show_reference:
+        card = QUICK_REFERENCE_CARDS[st.session_state.show_reference]
+        st.markdown(card['content'])
+        if st.button("✖ Close Reference Card"):
+            st.session_state.show_reference = None
+            st.rerun()
+        st.write("---")
+
+    # Question input
     with st.form(key="question_form", clear_on_submit=True):
         question = st.text_input(
             "Ask a question about your contract:",
@@ -453,16 +974,21 @@ else:
         submit_button = st.form_submit_button("Ask", type="primary")
 
     if submit_button and question:
-        with st.spinner("Searching contract and generating answer..."):
+        st.session_state.show_reference = None
+
+        with st.spinner("Searching contract..."):
             chunks, embeddings = load_contract(st.session_state.selected_contract)
             openai_client, anthropic_client = init_clients()
+            history = st.session_state.conversation if st.session_state.conversation else None
 
             answer, status, response_time = ask_question(
                 question, chunks, embeddings,
                 openai_client, anthropic_client,
                 st.session_state.selected_contract,
-                airline_name
+                airline_name, history
             )
+
+            category = classify_question(question)
 
             logger = init_logger()
             logger.log_question(
@@ -476,24 +1002,70 @@ else:
             st.session_state.conversation.append({
                 'question': question,
                 'answer': answer,
-                'status': status
+                'status': status,
+                'category': category,
+                'response_time': round(response_time, 1)
             })
 
+    # ---- CONVERSATION HISTORY ----
     if st.session_state.conversation:
         st.write("---")
-        st.subheader("Conversation History")
 
         for i, qa in enumerate(reversed(st.session_state.conversation)):
-            with st.container():
-                st.write(f"**Q{len(st.session_state.conversation) - i}:** {qa['question']}")
+            q_num = len(st.session_state.conversation) - i
 
-                if qa['status'] == 'CLEAR':
-                    st.success(qa['answer'])
-                elif qa['status'] == 'AMBIGUOUS':
-                    st.warning(qa['answer'])
-                else:
-                    st.info(qa['answer'])
+            st.markdown(f"### Q{q_num}: {qa['question']}")
 
-                st.write("---")
+            # FEATURE 2: Canonical Question Label
+            category = qa.get('category', classify_question(qa['question']))
+            st.caption(f"📂 Question type: {category}  •  ⏱️ Answered in {qa.get('response_time', '?')}s")
 
-    st.caption("⚠️ **Disclaimer:** This tool searches only the pilot union contract (JCBA). It does not cover FAA regulations, company manuals, or other policies. This is not legal advice. Verify all answers against the actual contract and consult your union representative for guidance on disputes.")
+            # Answer with status color
+            if qa['status'] == 'CLEAR':
+                st.success(qa['answer'])
+            elif qa['status'] == 'AMBIGUOUS':
+                st.warning(qa['answer'])
+            else:
+                st.info(qa['answer'])
+
+            # FEATURE 3: "What Would Change This Answer?"
+            with st.expander("⚙️ What would change this answer?"):
+                st.markdown(get_answer_modifier(category))
+
+            # Bottom row
+            col1, col2, col3, col4 = st.columns([1, 1, 3, 1])
+
+            # FEATURE 4: Answer Rating
+            rating_key = f"rating_{q_num}"
+            with col1:
+                if st.button("👍", key=f"up_{q_num}"):
+                    log_rating(qa['question'], "up")
+                    st.session_state.ratings[rating_key] = "up"
+            with col2:
+                if st.button("👎", key=f"down_{q_num}"):
+                    log_rating(qa['question'], "down")
+                    st.session_state.ratings[rating_key] = "down"
+            with col3:
+                if rating_key in st.session_state.ratings:
+                    r = st.session_state.ratings[rating_key]
+                    st.caption("✅ Thanks for your feedback!" if r == "up" else "📝 Thanks — we'll review this answer.")
+
+            # FEATURE 5: Copy / Export Answer
+            copy_text = f"""Question: {qa['question']}
+Category: {category}
+Status: {qa['status']}
+
+{qa['answer']}
+
+---
+Generated by AskTheContract | {airline_name} JCBA
+This is not legal advice."""
+
+            with st.expander("📋 Copy / Export Answer"):
+                st.code(copy_text, language=None)
+                st.caption("Select all text above → Ctrl+C (or Cmd+C on Mac)")
+
+            st.write("---")
+
+    # ---- FOOTER ----
+    st.caption("⚠️ **Disclaimer:** This tool searches only the pilot union contract (JCBA). It does not cover FAA regulations, company manuals, or other policies. This is not legal advice. Consult your union representative.")
