@@ -1,25 +1,8 @@
-# API Keys and Secrets
+database/
+*.db
+logs/
+ratings.json
+answer_ratings.jsonl
 api_key.txt
-.streamlit/secrets.toml
-*.env
-
-# Python
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-.Python
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Old files
-chunks_final.pkl
-embeddings_final.pkl
-chunks_fixed.pkl
-embeddings_fixed.pkl
-chunks_improved.pkl
-embeddings_improved.pkl
-chunks_meta.pkl
-embeddings_meta.pkl
