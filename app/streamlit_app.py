@@ -80,9 +80,9 @@ def load_api_keys():
         with open('api_key.txt', 'r') as f:
             for line in f:
                 if 'OPENAI_API_KEY' in line:
-                    keys['openai'] = line.strip().split('=')[1]
+                    keys['openai'] = line.strip().split('=', 1)[1].strip().strip('"').strip("'")
                 if 'ANTHROPIC_API_KEY' in line:
-                    keys['anthropic'] = line.strip().split('=')[1]
+                    keys['anthropic'] = line.strip().split('=', 1)[1].strip().strip('"').strip("'")
         return keys
 
 @st.cache_resource
@@ -119,19 +119,14 @@ def get_embedding_cached(question_text, _openai_client):
 
 # ============================================================
 # FORCE-INCLUDE CHUNKS
-# When certain topics are detected, always include chunks
-# containing critical contract language regardless of
-# embedding similarity score. This ensures key provisions
-# are never missed due to how the question is worded.
 # ============================================================
 
-# Phrases that MUST be in the context when topic is detected
 FORCE_INCLUDE_RULES = {
     'days_off': {
-        'trigger_keywords': ['day off', 'days off', 'rest period', 'week off', 'time off', 'duty free', 'one day per week', 'day per week', 'weekly day'],
+        'trigger_keywords': ['day off', 'days off', 'rest period', 'week off', 'time off', 'duty free', 'one day per week', 'day per week', 'weekly day', 'days a week', 'off per week', 'off a week'],
         'must_include_phrases': [
             'regular line shall be scheduled with at least one (1) day off in any seven',
-            'composite line shall be scheduled with at least one (1) scheduled day off in any seven',
+            'composite line shall be scheduled with at least one (1) day off in any seven',
             'shall receive at least one (1) twenty-four (24) hour rest period free from all duty within any seven',
             'schedule the pilot for one (1) day off in every seven (7) days',
             'minimum scheduled days off in all constructed initial lines shall be thirteen',
@@ -157,26 +152,22 @@ def find_force_include_chunks(question_lower, all_chunks):
     """Find chunks that MUST be included based on question topic."""
     forced = []
     for rule_name, rule in FORCE_INCLUDE_RULES.items():
-        # Check if any trigger keyword matches
         if any(kw in question_lower for kw in rule['trigger_keywords']):
-            # Find chunks containing the must-include phrases
             for chunk in all_chunks:
-                chunk_text_lower = chunk['text'].lower()
+                chunk_text_lower = ' '.join(chunk['text'].lower().split())
                 for phrase in rule['must_include_phrases']:
                     if phrase in chunk_text_lower:
                         if chunk not in forced:
                             forced.append(chunk)
-                        break  # One match per chunk is enough
+                        break
     return forced
 
 def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
     question_embedding = get_embedding_cached(question, openai_client)
     question_lower = question.lower()
 
-    # Step 1: Find force-include chunks for this question topic
     forced_chunks = find_force_include_chunks(question_lower, chunks)
 
-    # Step 2: Normal embedding search
     similarities = []
     for i, chunk_embedding in enumerate(embeddings):
         score = cosine_similarity(question_embedding, chunk_embedding)
@@ -185,19 +176,15 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
     similarities.sort(reverse=True, key=lambda x: x[0])
     embedding_chunks = [chunk for score, chunk in similarities[:max_chunks]]
 
-    # Step 3: Merge - forced chunks first, then fill remaining from embedding results
-    # Deduplicate by chunk id
     seen_ids = set()
     merged = []
 
-    # Add forced chunks first (these are critical and must always be present)
     for chunk in forced_chunks:
         chunk_id = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
         if chunk_id not in seen_ids:
             seen_ids.add(chunk_id)
             merged.append(chunk)
 
-    # Fill remaining slots with embedding results
     for chunk in embedding_chunks:
         chunk_id = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
         if chunk_id not in seen_ids:
@@ -215,7 +202,7 @@ def _ask_question_api(question, chunks, embeddings, openai_client, anthropic_cli
     start_time = time.time()
 
     pay_keywords = ['pay', 'rate', 'hourly', 'salary', 'wage', 'compensation', 'earning', 'make per hour', 'dpg', 'scale', 'duty rig', 'trip rig', 'pch']
-    scheduling_keywords = ['day off', 'days off', 'rest period', 'rest requirement', 'schedule', 'line construction', 'composite line', 'regular line', 'reserve line', 'bid line', 'workday', 'work day', 'consecutive days', 'week off', 'time off', 'duty free']
+    scheduling_keywords = ['day off', 'days off', 'rest period', 'rest requirement', 'schedule', 'line construction', 'composite line', 'regular line', 'reserve line', 'bid line', 'workday', 'work day', 'consecutive days', 'week off', 'time off', 'duty free', 'days a week', 'off per week', 'off a week']
 
     question_lower = question.lower()
     is_pay_question = any(keyword in question_lower for keyword in pay_keywords)
