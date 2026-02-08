@@ -640,6 +640,10 @@ FORCE_INCLUDE_RULES = {
             'r-1 and r-2 rap shall not be scheduled to exceed twelve (12) hours',
             # Duty time limits apply to reserve
             'the duty time limitations and rest requirements for a pilot on a rap',
+            # Section 14.N extension provisions (needed when reserve duty extends past RAP)
+            'extension procedures',
+            'extension shall not cause',
+            'a pilot shall not be extended more than one (1) time per month',
         ]
     },
     'reserve_pay': {
@@ -668,7 +672,7 @@ FORCE_INCLUDE_RULES = {
         ]
     },
     'extension': {
-        'trigger_keywords': ['extension', 'extend', 'extended', 'kept past', 'held over', 'delayed past'],
+        'trigger_keywords': ['extension', 'extend', 'extended', 'kept past', 'held over', 'delayed past', 'past midnight', 'past 12', 'after midnight', 'next day', 'gets home', 'got home', '1am', '2am', '3am'],
         'must_include_phrases': [
             'extension procedures',
             'extension shall not cause',
@@ -862,11 +866,30 @@ When the question involves pay or compensation, you MUST:
   * Duty Rig: total duty hours divided by 2, multiplied by hourly rate
   * Trip Rig (TAFD): total TAFD hours divided by 4.9, multiplied by hourly rate
   * Scheduled PCH if provided in the scenario
-  * Overtime Premium: PCH multiplied by hourly rate multiplied by 1.5
+  * Overtime Premium: PCH multiplied by hourly rate multiplied by 1.5 — BUT ONLY when trigger conditions are met (see OVERTIME PREMIUM RULES below)
 - Show all math step by step — PCH values AND dollar amounts for EVERY calculation
 - Quote the contract language that defines each calculation
 - State which calculation the contract says applies, or if the contract does not specify
 - ALWAYS end pay analysis with a clear summary: "The pilot should be paid [X] PCH × $[rate] = $[total]"
+
+OVERTIME PREMIUM RULES:
+Section 3.Q.1 provides 150% pay for duty on a scheduled Day Off, but ONLY under specific trigger conditions:
+  a. Circumstances beyond the Company's control (weather, mechanical, ATC, or customer accommodation); OR
+  b. An Assignment to remain with an aircraft that requires time-consuming repairs.
+CRITICAL: If the scenario does NOT state the cause of the Day Off duty, you MUST:
+  - Quote the Section 3.Q.1 trigger conditions verbatim
+  - State: "The overtime premium depends on WHY the pilot worked into his Day Off. If caused by circumstances beyond the Company's control (weather, mechanical, ATC, customer accommodation) or assignment to remain with an aircraft for repairs, 150% applies. If the trip was simply scheduled to end after midnight, the trigger conditions may not be met."
+  - Do NOT automatically apply 150% — present it as conditional on the cause
+  - This ambiguity about whether 150% applies MUST result in AMBIGUOUS status unless the scenario explicitly states the cause
+
+OVERTIME SCOPE RULE:
+Section 3.Q.1 states 150% applies to "the PCH earned when he is on Duty on a scheduled Day Off." When a single duty period spans both a workday and a Day Off, there are two reasonable interpretations:
+  a. 150% applies to ALL PCH for the entire duty period (because the pilot WAS on duty on a Day Off)
+  b. 150% applies only to the PCH attributable to the Day Off hours (because only that portion was "on Duty on a scheduled Day Off")
+You MUST acknowledge both interpretations and flag this as a point of ambiguity. Do NOT silently pick one interpretation.
+MANDATORY: Any time overtime premium is discussed AND the duty period spans both a workday and a Day Off, you MUST include this exact paragraph in your EXPLANATION section:
+"⚠️ OVERTIME SCOPE DISPUTE: Even if the 150% premium applies, the contract does not specify whether it covers all PCH earned in the duty period or only the PCH attributable to the Day Off hours. Both interpretations are reasonable, and this is a potential area of dispute."
+Do NOT omit this paragraph. It is REQUIRED whenever overtime and Day Off overlap occur together.
 
 CRITICAL RESERVE PAY RULES:
 When calculating pay for a Reserve Pilot who is assigned a trip:
@@ -875,10 +898,14 @@ When calculating pay for a Reserve Pilot who is assigned a trip:
 - For ANY scheduled trip, Duty begins 1 hour before the scheduled departure time. For reserve pilots, use whichever is EARLIER: the RAP DOT or 1 hour before flight departure.
 - For Duty Rig calculations, use the FULL duty period: from RAP DOT or 1 hour before departure (whichever is earlier) to actual release from duty (when the pilot is back and released, not when the flight lands).
 - If a reserve pilot works past the end of his scheduled RAP (e.g., past midnight into the next day), you MUST flag this as an extension issue and address ALL of the following:
-  * EXTENSION: State that the pilot was extended beyond his scheduled RAP. Cite Section 14.N extension provisions.
+  * EXTENSION: The pilot was extended beyond his scheduled RAP. You MUST include a dedicated paragraph in your EXPLANATION with the header "⏰ EXTENSION ANALYSIS:" that:
+    (1) Explicitly states: "The pilot's scheduled RAP ended at [time] but the pilot was not released until [time]. This constitutes an extension of [X hours] beyond the scheduled RAP."
+    (2) Quotes the specific Section 14.N extension provisions from the provided contract sections — the ACTUAL contract language in quotation marks with section and page citation. Do NOT just mention "Section 14.N" by name.
+    (3) If Section 14.N language is not in the provided contract sections, state: "Section 14.N extension provisions should be reviewed but were not available in the retrieved contract sections."
+    This is a REQUIRED output section — do NOT fold it into general discussion or skip it.
   * DAY OFF IMPACT: Check whether the next day is a scheduled Day Off. If so, cite the 0200 LDT rule (15.A.7-8) — assignments may be scheduled up to 0200 LDT into a Day Off. If the pilot works past 0200, this is a potential contract violation.
-  * OVERTIME PREMIUM: Determine if overtime premium applies for work beyond scheduled duty or on a Day Off.
-  * SECOND WORKDAY: Determine if the work past midnight triggers a second Duty Period or Workday, which could mean additional DPG or other pay.
+  * OVERTIME PREMIUM: Apply the OVERTIME PREMIUM RULES above. Do NOT automatically award 150%. Check whether the scenario states a qualifying trigger condition (Section 3.Q.1). If the cause is not stated, present the premium as conditional and flag ambiguity.
+  * SECOND WORKDAY: Explicitly determine whether the work past midnight triggers a second Duty Period or Workday, which could mean additional DPG or other pay. You MUST address this directly — cite the overlapping-days provision (Section 3.D.2: a single Duty Period overlapping two Days constitutes one Workday) if applicable, and explicitly state your conclusion (e.g., "This is one continuous duty period, so it constitutes one Workday under Section 3.D.2"). Do NOT skip this step.
   * Do NOT skip this analysis. Any time actual duty extends beyond the scheduled RAP end time, these provisions MUST be discussed.
 - Per Section 3.F.1.b, a Reserve Pilot receives the GREATER of: DPG, or the PCH earned from the assigned Trip Pairing (calculated per Section 3.E using block time, Duty Rig, or Trip Rig — whichever is greatest).
 - Always compare ALL applicable calculations (block PCH, Duty Rig, Trip Rig, DPG) and pay the GREATEST value.
@@ -907,6 +934,8 @@ AMBIGUOUS - Use when:
 - Provisions appear to conflict with each other
 - The contract language is open to more than one reasonable interpretation
 - The contract addresses the topic partially but not completely
+- The scenario is missing key details needed to determine which provision applies (e.g., the cause of Day Off work is not stated, so the 150% trigger cannot be confirmed; the pilot's line type is not stated, so different rules could apply)
+- A premium or benefit has trigger conditions and the scenario does not confirm whether those conditions are met
 
 NOT ADDRESSED - Use when:
 - The contract does not contain any language relevant to the question
@@ -921,6 +950,15 @@ Always structure your response exactly as follows:
 (Repeat for each relevant provision found)
 
 📝 EXPLANATION: [Plain English explanation of what the contract language means, how provisions interact, and what the answer to the question is based solely on the contract text]
+
+MANDATORY SUBSECTIONS WITHIN EXPLANATION (include when applicable):
+
+⏰ EXTENSION ANALYSIS: REQUIRED any time a pilot's actual duty extends beyond the end of a scheduled RAP or duty period. You MUST include this header and:
+(1) State: "The pilot's scheduled RAP ended at [time] but the pilot was not released until [time]. This constitutes an extension of [X hour(s)] beyond the scheduled RAP."
+(2) Quote the specific Section 14.N extension provisions from the provided contract sections in quotation marks with section/page citation. If 14.N language is not in the provided sections, state: "Section 14.N extension provisions should be reviewed but were not available in the retrieved contract sections."
+(3) State whether the extension is the pilot's first that month (relevant to the one-extension-per-month limit).
+
+⚠️ OVERTIME SCOPE DISPUTE: REQUIRED any time overtime premium is discussed AND the duty period spans both a workday and a Day Off. See OVERTIME SCOPE RULE above for required language.
 
 🔵 STATUS: [CLEAR/AMBIGUOUS/NOT ADDRESSED] - [One sentence justification for the status]
 
