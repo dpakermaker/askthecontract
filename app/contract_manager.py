@@ -1,6 +1,7 @@
 import pickle
 import json
 import os
+import numpy as np
 from pathlib import Path
 
 class ContractManager:
@@ -26,7 +27,7 @@ class ContractManager:
                     with open(metadata_file, 'r') as f:
                         metadata = json.load(f)
                         self.contracts[metadata['contract_id']] = metadata
-                        print(f"  ✓ Loaded {metadata['airline_name']} ({metadata['contract_id']})")
+                        print(f"  ✔ Loaded {metadata['airline_name']} ({metadata['contract_id']})")
     
     def get_available_contracts(self):
         """Get list of all available contracts"""
@@ -51,13 +52,19 @@ class ContractManager:
         with open(chunks_file, 'rb') as f:
             chunks = pickle.load(f)
         
-        # Load embeddings
-        embeddings_file = contract_path / 'embeddings.pkl'
-        if not embeddings_file.exists():
-            raise FileNotFoundError(f"Embeddings file not found for {contract_id}")
+        # Load embeddings - prefer .npy (memory efficient), fallback to .pkl
+        npy_file = contract_path / 'embeddings.npy'
+        pkl_file = contract_path / 'embeddings.pkl'
         
-        with open(embeddings_file, 'rb') as f:
-            embeddings = pickle.load(f)
+        if npy_file.exists():
+            embeddings = np.load(str(npy_file), allow_pickle=False)
+            # Convert to list of arrays for compatibility
+            embeddings = [embeddings[i] for i in range(len(embeddings))]
+        elif pkl_file.exists():
+            with open(pkl_file, 'rb') as f:
+                embeddings = pickle.load(f)
+        else:
+            raise FileNotFoundError(f"Embeddings file not found for {contract_id}")
         
         return chunks, embeddings
     
@@ -94,7 +101,7 @@ if __name__ == "__main__":
     
     try:
         chunks, embeddings = manager.load_contract_data('NAC')
-        print(f"\n✓ Successfully loaded NAC contract:")
+        print(f"\n✔ Successfully loaded NAC contract:")
         print(f"  Chunks: {len(chunks)}")
         print(f"  Embeddings: {len(embeddings)}")
         
@@ -102,7 +109,7 @@ if __name__ == "__main__":
         if len(chunks) > 0:
             print(f"  First chunk ID: {chunks[0]['id']}")
             print(f"  First chunk page: {chunks[0]['page']}")
-            print(f"  ✓ Data structure looks good!")
+            print(f"  ✔ Data structure looks good!")
         
         print("\n" + "="*70)
         print("✅ ALL TESTS PASSED!")
