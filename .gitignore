@@ -5,4 +5,4 @@ ratings.json
 answer_ratings.jsonl
 api_key.txt
 __pycache__/
-*.pyc
+*.pyccache/ 
