@@ -543,14 +543,28 @@ def get_semantic_cache():
 
 @st.cache_resource
 def load_api_keys():
+    import os
+    keys = {}
+    
+    # Try environment variables first (Railway)
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    
+    if anthropic_key and openai_key:
+        keys['anthropic'] = anthropic_key
+        keys['openai'] = openai_key
+        return keys
+    
+    # Then try Streamlit secrets
     try:
-        keys = {
-            'openai': st.secrets["OPENAI_API_KEY"],
-            'anthropic': st.secrets["ANTHROPIC_API_KEY"]
-        }
+        keys['openai'] = st.secrets["OPENAI_API_KEY"]
+        keys['anthropic'] = st.secrets["ANTHROPIC_API_KEY"]
         return keys
     except:
-        keys = {}
+        pass
+    
+    # Then try file
+    try:
         with open('api_key.txt', 'r') as f:
             for line in f:
                 if 'OPENAI_API_KEY' in line:
@@ -558,7 +572,9 @@ def load_api_keys():
                 if 'ANTHROPIC_API_KEY' in line:
                     keys['anthropic'] = line.strip().split('=', 1)[1].strip().strip('"').strip("'")
         return keys
-
+    except FileNotFoundError:
+        st.error("API keys not found. Set ANTHROPIC_API_KEY and OPENAI_API_KEY environment variables.")
+        st.stop()
 @st.cache_resource
 def init_clients():
     keys = load_api_keys()
