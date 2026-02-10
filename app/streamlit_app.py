@@ -788,19 +788,31 @@ def find_force_include_chunks(question_lower, all_chunks):
 CONTEXT_PACKS = {
     # PAY questions — Section 3 core + Appendix A + Reserve Pay + Check Airman premiums
     'pay': {
-        'pages': [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 66, 200, 322, 338],
+        'pages': [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 66, 200, 322, 338,
+                  386, 387,  # MOU #5: MPG/line PCH implications
+                  390,       # MOU #7: Check Airman Pay
+                  391,       # MOU #8: Pay When Changing Positions
+        ],
         'embedding_top_n': 15,
         'max_total': 30,
     },
     # RESERVE questions — Section 15 + MOU reserve + reserve pay
     'reserve': {
-        'pages': [193, 194, 195, 196, 197, 198, 199, 200, 384, 385],
+        'pages': [193, 194, 195, 196, 197, 198, 199, 200,
+                  381,       # MOU #2: Positive Contact
+                  382,       # MOU #3: Reassignment to Trip Pairings
+                  383, 384, 385,  # MOU #4: Reserve Reassignment types
+        ],
         'embedding_top_n': 15,
         'max_total': 30,
     },
     # SCHEDULING / DAYS OFF — Section 14 key provisions + LOA #15 scheduling + extensions
     'scheduling': {
-        'pages': [160, 161, 168, 169, 170, 171, 172, 173, 177, 180, 181, 185, 188, 190, 326, 328, 342, 344],
+        'pages': [160, 161, 168, 169, 170, 171, 172, 173, 177, 180, 181, 185, 188, 190,
+                  326, 328, 342, 344,  # LOA #15 scheduling
+                  383, 384, 385,       # MOU #4: Reserve Reassignment
+                  386, 387,            # MOU #5: Line construction/MPG
+        ],
         'embedding_top_n': 15,
         'max_total': 30,
     },
@@ -810,27 +822,37 @@ CONTEXT_PACKS = {
         'embedding_top_n': 10,
         'max_total': 25,
     },
-    # TRAINING — Section 12 + Section 22 (Check Airman/Instructor duties)
+    # TRAINING — Section 12 + Section 22 + Check Airman LOA/MOU
     'training': {
-        'pages': [145, 146, 147, 148, 149, 150, 151, 152, 231, 232, 233, 234],
+        'pages': [145, 146, 147, 148, 149, 150, 151, 152, 231, 232, 233, 234,
+                  323,       # LOA #15: Check Airman Ghost Bid/scheduling
+                  390,       # MOU #7: Check Airman Pay
+                  392,       # MOU #9: Check Airman Line Integration
+        ],
         'embedding_top_n': 15,
         'max_total': 30,
     },
-    # HOURS OF SERVICE — Section 13
+    # HOURS OF SERVICE — Section 13 + Positive Contact MOU
     'hours': {
-        'pages': [151, 152, 153, 154, 155, 156, 157, 158],
+        'pages': [151, 152, 153, 154, 155, 156, 157, 158,
+                  381,  # MOU #2: Positive Contact (ties to Section 13.H)
+        ],
         'embedding_top_n': 10,
         'max_total': 25,
     },
-    # VACATION / LEAVE — Sections 8 & 9 + PTO
+    # VACATION / LEAVE — Sections 8 & 9 + PTO + MOU #1
     'vacation': {
-        'pages': [105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 121, 122, 123, 124, 125, 126, 127, 129, 130, 132, 134, 139],
+        'pages': [105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 121, 122, 123, 124, 125, 126, 127, 129, 130, 132, 134, 139,
+                  379,  # MOU #1: PTO Day Conversion
+        ],
         'embedding_top_n': 10,
         'max_total': 30,
     },
-    # SENIORITY / FURLOUGH — Sections 4 & 17
+    # SENIORITY / FURLOUGH — Sections 4 & 17 + LOA #11 vacancy fences
     'seniority': {
-        'pages': [204, 205, 206, 207, 208, 209, 210, 211, 212, 213],
+        'pages': [204, 205, 206, 207, 208, 209, 210, 211, 212, 213,
+                  307, 308, 309, 310, 311,  # LOA #11: Vacancy filling/seniority fences
+        ],
         'embedding_top_n': 10,
         'max_total': 25,
     },
@@ -840,9 +862,11 @@ CONTEXT_PACKS = {
         'embedding_top_n': 10,
         'max_total': 25,
     },
-    # EXPENSES / LODGING — Section 6
+    # EXPENSES / LODGING — Section 6 + MOU #6 Paid Move
     'expenses': {
-        'pages': [86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104],
+        'pages': [86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104,
+                  388,  # MOU #6: Company Paid Move Entitlement
+        ],
         'embedding_top_n': 10,
         'max_total': 25,
     },
@@ -873,6 +897,65 @@ CATEGORY_TO_PACK = {
     'Vacation / Leave': 'vacation',
     'Benefits': 'benefits',
     'Furlough': 'seniority',
+}
+
+# Provision chains: keyword triggers → supplemental LOA/MOU pages
+# These fire regardless of pack category to catch cross-references
+PROVISION_CHAINS = {
+    # Check Airman / Instructor topics → all Check Airman LOA/MOU pages
+    'check airman': [322, 323, 338, 339, 390, 392],
+    'instructor pilot': [322, 323, 338, 339, 390, 392],
+    'apd': [322, 323, 338, 339, 390, 392],
+    'ghost bid': [322, 323, 338, 339],
+    # Positive Contact → MOU #2 + Section 13.H
+    'positive contact': [154, 155, 381],
+    'schedule change': [154, 155, 381],
+    'contact method': [381],
+    # Reserve reassignment → MOU #3, #4
+    'reassign': [382, 383, 384, 385],
+    'r-1 to r-2': [383, 384, 385],
+    'r-2 to r-1': [383, 384, 385],
+    'reserve type': [383, 384, 385],
+    # PTO conversion → MOU #1
+    'pto conversion': [379],
+    'pto bank': [379],
+    'pto day': [379],
+    # Paid move → MOU #6
+    'paid move': [388],
+    'company move': [388],
+    'relocation': [388],
+    # Position change pay → MOU #8
+    'position change': [391],
+    'upgrade pay': [391],
+    'changing position': [391],
+    # Vacancy / seniority fences → LOA #11
+    'vacancy': [307, 308, 309, 310, 311],
+    'displacement': [307, 308, 309, 310, 311],
+    'fence period': [307, 308, 309, 310, 311],
+    # MPG / line value → MOU #5
+    'mpg': [386, 387],
+    'line value': [386, 387],
+    'holdback': [386, 387],
+    'hold-back': [386, 387],
+    # Scope / acquisition → LOA #7, #9, #10, #16
+    'scope': [293, 294, 295, 301, 302, 304, 305, 353, 354],
+    'carrier a': [353, 354, 355, 356, 357, 358],
+    'affiliate': [293, 294, 295],
+    'subcontract': [304, 305, 306, 353, 357],
+    # ASAP / FOQA → LOA #3, #4
+    'asap': [281, 282, 283, 284, 285],
+    'foqa': [272, 273, 274, 275, 276, 277],
+    # Extension → Section 14.N
+    'extension': [185, 186],
+    # Landing credit → Section 3.T
+    'landing credit': [63],
+    'landing premium': [63],
+    # Hostile area → Section 3.U
+    'hostile area': [63],
+    'hostile operation': [63],
+    # NRFO → Section 3.L
+    'nrfo': [58],
+    'non-routine': [58],
 }
 
 def get_pack_chunks(pack_key, all_chunks):
@@ -912,6 +995,11 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
         for pk in matching_packs:
             merged_pages.update(CONTEXT_PACKS[pk]['pages'])
 
+        # Provision chain injection — add LOA/MOU pages triggered by keywords
+        for keyword, chain_pages in PROVISION_CHAINS.items():
+            if keyword in question_lower:
+                merged_pages.update(chain_pages)
+
         pack_chunks = [c for c in chunks if c['page'] in merged_pages]
 
         # Multi-pack gets slightly higher cap; single pack stays at 30
@@ -939,7 +1027,15 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
             pack_chunks = [pc for _, pc in pack_scores[:max_pack]]
     else:
         # FALLBACK MODE: pure embedding search (General questions)
-        pack_chunks = []
+        # But still check provision chains for keyword-triggered pages
+        chain_pages = set()
+        for keyword, pages in PROVISION_CHAINS.items():
+            if keyword in question_lower:
+                chain_pages.update(pages)
+        if chain_pages:
+            pack_chunks = [c for c in chunks if c['page'] in chain_pages]
+        else:
+            pack_chunks = []
         embedding_top_n = 30
         max_total = 30
 
