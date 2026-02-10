@@ -5,7 +5,6 @@ from openai import OpenAI
 from anthropic import Anthropic
 import time
 import sys
-import re
 import threading
 import json
 import os
@@ -768,125 +767,20 @@ FORCE_INCLUDE_RULES = {
     },
 }
 
-# ============================================================
-# UPGRADE: DEFINITIONS AUTO-INJECT (Improvement #7)
-# ============================================================
-DEFINITION_TERMS = {
-    'duty': ['day off', 'days off', 'duty', 'on duty', 'off duty', 'rest period', 'workday'],
-    'pay': ['pay', 'compensation', 'pch', 'dpg', 'daily pay guarantee', 'duty rig', 'trip rig', 'overtime', 'premium'],
-    'assignment': ['assignment', 'reassign', 'junior assignment', 'open time', 'trip pairing'],
-    'reserve': ['reserve', 'r-1', 'r-2', 'r-3', 'r-4', 'rap', 'fifo'],
-}
-
-DEFINITION_PHRASES = [
-    '"day off" means', '"day off" shall mean', 'day off" is defined',
-    '"rest period" means', '"rest period" shall mean', 'rest period" is defined',
-    '"duty" means', '"duty" shall mean', '"duty period" means',
-    '"workday" means', '"workday" shall mean',
-    '"assignment" means', '"assignment" shall mean',
-    '"trip pairing" means', '"trip pairing" shall mean',
-    '"reserve availability period"', '"rap" means',
-    '"time away from domicile"', '"tafd"',
-    '"pilot credit hours"', '"pch"',
-    '"daily pay guarantee"', '"dpg"',
-    '"duty rig"', '"trip rig"',
-    '"open time"', '"junior assignment"',
-    '"extension"', '"deadhead"',
-    '"domicile"', '"base"',
-    '"positive contact"',
-    'the following definitions shall apply',
-    'for purposes of this section',
-    'as used in this agreement',
-]
-
-# ============================================================
-# UPGRADE: LOA/MOU FORCE-INCLUDE (Improvement #9)
-# ============================================================
-LOA_MOU_FORCE_RULES = {
-    'scheduling': {
-        'trigger_keywords': ['schedule', 'line construction', 'bid', 'day off', 'days off', 'workday', 'composite', 'regular line', 'reserve line', 'domicile flex', 'tdy'],
-        'force_sections': ['LOA #15 - Section 14 Scheduling', 'LOA #5 - Section 14 Implementation', 'LOA #3 - Scheduling/Bidding'],
-    },
-    'reserve': {
-        'trigger_keywords': ['reserve', 'r-1', 'r-2', 'r-3', 'r-4', 'r1', 'r2', 'r3', 'r4', 'rap', 'fifo', 'reassign', 'reassignment'],
-        'force_sections': ['MOU #4 - Reserve Reassignment', 'MOU #7 - Scheduling Definitions'],
-    },
-    'pay': {
-        'trigger_keywords': ['pay', 'rate', 'hourly', 'salary', 'wage', 'compensation', 'overtime', 'premium', 'dpg', 'duty rig', 'trip rig', 'pch'],
-        'force_sections': ['Appendix A - Pay Rates', 'MOU #8 - Pay Position Change'],
-    },
-    'hours': {
-        'trigger_keywords': ['duty time', 'duty limit', 'max duty', 'hours of service', 'rest requirement', 'minimum rest', 'flight time limit'],
-        'force_sections': ['LOA #15 - Section 14 Scheduling'],
-    },
-    'training': {
-        'trigger_keywords': ['training', 'check airman', 'instructor', 'simulator', 'upgrade', 'transition'],
-        'force_sections': ['MOU #5 - Check Airman Training', 'LOA #8 - Training'],
-    },
-    'contact': {
-        'trigger_keywords': ['contact', 'positive contact', 'phone', 'call back', 'crew scheduling call'],
-        'force_sections': ['MOU #2 - Positive Contact'],
-    },
-    'international': {
-        'trigger_keywords': ['international', 'vpa', 'volunteer pilot'],
-        'force_sections': ['MOU #6 - VPA International', 'LOA #6 - International Operations'],
-    },
-}
-
 def find_force_include_chunks(question_lower, all_chunks):
     forced = []
-    forced_ids = set()
-    
-    # Original keyword→phrase force-include rules
     for rule_name, rule in FORCE_INCLUDE_RULES.items():
         if any(kw in question_lower for kw in rule['trigger_keywords']):
             for chunk in all_chunks:
                 chunk_text_lower = ' '.join(chunk['text'].lower().split())
                 for phrase in rule['must_include_phrases']:
                     if phrase in chunk_text_lower:
-                        cid = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
-                        if cid not in forced_ids:
-                            forced_ids.add(cid)
+                        if chunk not in forced:
                             forced.append(chunk)
                         break
-    
-    # IMPROVEMENT #7: Definitions auto-inject
-    for category, keywords in DEFINITION_TERMS.items():
-        if any(kw in question_lower for kw in keywords):
-            for chunk in all_chunks:
-                chunk_text_lower = ' '.join(chunk['text'].lower().split())
-                for phrase in DEFINITION_PHRASES:
-                    if phrase in chunk_text_lower:
-                        cid = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
-                        if cid not in forced_ids:
-                            forced_ids.add(cid)
-                            forced.append(chunk)
-                        break
-    
-    # IMPROVEMENT #8: Pay tables auto-inject (Appendix A)
-    if any(kw in question_lower for kw in ['pay', 'rate', 'hourly', 'salary', 'wage', 'captain rate', 'fo rate', 'first officer rate', 'longevity', 'appendix a', 'year ']):
-        for chunk in all_chunks:
-            section = str(chunk.get('section', ''))
-            if 'Appendix A' in section:
-                cid = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
-                if cid not in forced_ids:
-                    forced_ids.add(cid)
-                    forced.append(chunk)
-    
-    # IMPROVEMENT #9: LOA/MOU force-include by topic
-    for rule_name, rule in LOA_MOU_FORCE_RULES.items():
-        if any(kw in question_lower for kw in rule['trigger_keywords']):
-            for section_name in rule['force_sections']:
-                for chunk in all_chunks:
-                    if str(chunk.get('section', '')) == section_name:
-                        cid = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
-                        if cid not in forced_ids:
-                            forced_ids.add(cid)
-                            forced.append(chunk)
-    
     return forced
 
-def search_contract(question, chunks, embeddings, openai_client, max_chunks=30):
+def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
     question_embedding = get_embedding_cached(question, openai_client)
     question_lower = question.lower()
     forced_chunks = find_force_include_chunks(question_lower, chunks)
@@ -894,122 +788,26 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=30):
     similarities = []
     for i, chunk_embedding in enumerate(embeddings):
         score = cosine_similarity(question_embedding, chunk_embedding)
-        similarities.append((score, i, chunks[i]))
+        similarities.append((score, chunks[i]))
 
     similarities.sort(reverse=True, key=lambda x: x[0])
-    
-    # IMPROVEMENT #2: Diversity rule — max 3 chunks per page
-    page_counts = {}
-    diverse_chunks = []
-    diverse_indices = set()
-    for score, idx, chunk in similarities:
-        page = chunk['page']
-        page_counts[page] = page_counts.get(page, 0) + 1
-        if page_counts[page] <= 3:
-            diverse_chunks.append((score, idx, chunk))
-            diverse_indices.add(idx)
-            if len(diverse_chunks) >= max_chunks * 2:  # grab extra for neighbor/xref filtering
-                break
+    embedding_chunks = [chunk for score, chunk in similarities[:max_chunks]]
 
-    # IMPROVEMENT #3: Neighbor chunk retrieval — grab adjacent chunks
-    neighbor_indices = set()
-    for _, idx, _ in diverse_chunks[:max_chunks]:
-        for neighbor_idx in [idx - 1, idx + 1]:
-            if 0 <= neighbor_idx < len(chunks) and neighbor_idx not in diverse_indices:
-                neighbor_indices.add(neighbor_idx)
-    
-    # IMPROVEMENT #4: Cross-reference resolver — find referenced sections
-    xref_chunks = []
-    section_pattern = re.compile(r'[Ss]ection\s+(\d+(?:\.\w+)*)')
-    loa_pattern = re.compile(r'(?:LOA|Letter of Agreement)\s*#?\s*(\d+)', re.IGNORECASE)
-    mou_pattern = re.compile(r'(?:MOU|Memorandum of Understanding)\s*#?\s*(\d+)', re.IGNORECASE)
-    
-    referenced_sections = set()
-    referenced_loas = set()
-    referenced_mous = set()
-    
-    for _, _, chunk in diverse_chunks[:max_chunks]:
-        text = chunk['text']
-        for match in section_pattern.finditer(text):
-            sec_num = match.group(1).split('.')[0]
-            referenced_sections.add(f"Section {sec_num}")
-        for match in loa_pattern.finditer(text):
-            referenced_loas.add(int(match.group(1)))
-        for match in mou_pattern.finditer(text):
-            referenced_mous.add(int(match.group(1)))
-    
-    # Add chunks from referenced sections/LOAs/MOUs that aren't already included
-    xref_ids = set()
-    for chunk in chunks:
-        section = str(chunk.get('section', ''))
-        cid = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
-        if section in referenced_sections and cid not in xref_ids:
-            xref_ids.add(cid)
-            xref_chunks.append(chunk)
-        for loa_num in referenced_loas:
-            if f'LOA #{loa_num}' in section and cid not in xref_ids:
-                xref_ids.add(cid)
-                xref_chunks.append(chunk)
-        for mou_num in referenced_mous:
-            if f'MOU #{mou_num}' in section and cid not in xref_ids:
-                xref_ids.add(cid)
-                xref_chunks.append(chunk)
-
-    # Merge: forced → top embedding → neighbors → cross-refs (deduplicated)
     seen_ids = set()
     merged = []
-    
     for chunk in forced_chunks:
         chunk_id = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
         if chunk_id not in seen_ids:
             seen_ids.add(chunk_id)
             merged.append(chunk)
-    
-    for _, idx, chunk in diverse_chunks:
+    for chunk in embedding_chunks:
         chunk_id = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
         if chunk_id not in seen_ids:
             seen_ids.add(chunk_id)
             merged.append(chunk)
             if len(merged) >= max_chunks:
                 break
-    
-    # Add neighbors (up to 5 extra)
-    neighbor_added = 0
-    for idx in sorted(neighbor_indices):
-        chunk = chunks[idx]
-        chunk_id = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
-        if chunk_id not in seen_ids:
-            seen_ids.add(chunk_id)
-            merged.append(chunk)
-            neighbor_added += 1
-            if neighbor_added >= 5:
-                break
-    
-    # Add cross-ref chunks (up to 5 extra)
-    xref_added = 0
-    for chunk in xref_chunks:
-        chunk_id = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
-        if chunk_id not in seen_ids:
-            seen_ids.add(chunk_id)
-            merged.append(chunk)
-            xref_added += 1
-            if xref_added >= 5:
-                break
-    
     return merged
-
-# IMPROVEMENT #5: Context packing — clean junk from chunk text
-def clean_chunk_text(text):
-    """Remove DocuSign IDs, page footers, signature blocks from chunk text."""
-    import re
-    # Remove DocuSign envelope IDs
-    text = re.sub(r'DocuSign Envelope ID:\s*[A-Fa-f0-9\-]+', '', text)
-    # Remove page footer patterns like "Page X of Y"
-    text = re.sub(r'Page\s+\d+\s+of\s+\d+', '', text)
-    # Remove excessive whitespace
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    text = re.sub(r' {3,}', ' ', text)
-    return text.strip()
 
 # ============================================================
 # API CALL
@@ -1024,21 +822,18 @@ def _ask_question_api(question, chunks, embeddings, openai_client, anthropic_cli
     is_pay_question = any(keyword in question_lower for keyword in pay_keywords)
     is_scheduling_question = any(keyword in question_lower for keyword in scheduling_keywords)
 
-    # IMPROVEMENT #1: Smart chunk reduction (75→30 default, 100→40 for pay/scheduling)
     if is_pay_question or is_scheduling_question:
-        max_chunks = 40
+        max_chunks = 100
     else:
-        max_chunks = 30
+        max_chunks = 75
 
     relevant_chunks = search_contract(question, chunks, embeddings, openai_client, max_chunks=max_chunks)
 
-    # IMPROVEMENT #5: Context packing — clean junk from chunks before sending
     context_parts = []
     for chunk in relevant_chunks:
         section_info = chunk.get('section', 'Unknown Section')
         aircraft_info = f", Aircraft: {chunk['aircraft_type']}" if chunk.get('aircraft_type') else ""
-        cleaned_text = clean_chunk_text(chunk['text'])
-        context_parts.append(f"[Page {chunk['page']}, {section_info}{aircraft_info}]\n{cleaned_text}")
+        context_parts.append(f"[Page {chunk['page']}, {section_info}{aircraft_info}]\n{chunk['text']}")
 
     context = "\n\n---\n\n".join(context_parts)
 
@@ -1074,6 +869,63 @@ ANALYSIS RULES:
 - Distinguish between different pilot categories: Regular Line holders, Reserve pilots (R-1, R-2, R-3, R-4), Composite Line holders, TDY pilots, Domicile Flex Line holders
 - Distinguish between different types of assignments: Trip Pairings, Reserve Assignments, Company-Directed Assignments, Training, Deadhead
 - When a provision applies only to specific categories, state which categories clearly
+
+SECTION 2 – KEY CONTRACT DEFINITIONS (Condensed Reference):
+These are official contract definitions from Section 2. Always use these meanings when interpreting contract language:
+- Active Service = Available for Assignment, on Sick Leave, Vacation, or LOA where Longevity accrues. Furlough/unpaid LOA ≠ Active Service.
+- Agreement = This CBA + all Side Letters, MOUs, and LOAs.
+- Aircraft Type = Specific make/model per FARs (e.g., B737, B767).
+- Assignment = Flight, Reserve, Training, or any Company-directed activity; also an awarded Vacancy.
+- Block Time = Brakes released (pushback/taxi) to brakes set at destination.
+- Captain = Pilot in Command, holds Captain bid status.
+- Check Airman (Full) = Company/FAA-approved to instruct, train, check in aircraft, simulator, or classroom.
+- Check Airman (Line/LCA) = Approved for instruction/checking during line operations or classroom.
+- Composite Line = Blank line in Bid Package; constructed after SAP with any mix of Duty/Days Off.
+- Company-Directed Assignment = Scheduled work at Company direction; a scheduled Assignment on a Pilot's Line.
+- Company Provided Benefits = Health Insurance, AD&D, Life Insurance, 401(k). Some at no cost; others cost-shared or Pilot-paid (e.g., STD/LTD buy-up).
+- Daily Pay Guarantee (DPG) = 3.82 PCH minimum per Day of scheduled Duty.
+- Day = Calendar Day 00:00–23:59 LDT.
+- Day Off = Scheduled Day free of ALL Duty, taken at Pilot's Domicile.
+- Deadhead Travel = Movement by air/surface to/from a Flight or Company-Directed Assignment.
+- Domicile = Company-designated Airport where Pilots are based (regardless of actual Residence).
+- Domicile Flex Line = Reserve Line with single block of 13+ consecutive Days Off; all Workdays are R-1 RAPs.
+- Duty = Any Company-directed activity: Flight, Deadhead, Training, R-1/R-2/R-4 Reserve, admin work, positioning.
+- Duty Assignment = Any requirement to be on Duty or Available (except R-3) counted toward Flight/Duty Time limits.
+- Duty Period = Continuous time from Report for Duty until Released from Duty and placed into Rest.
+- Duty Rig = Pay credit ratio 1:2 — one PCH per two hours of Duty, prorated minute-by-minute.
+- Eligible Dependent(s) = Spouse, children, domestic partner, or others qualifying for benefits/tax purposes per Agreement or law.
+- Eligible Pilot = A Pilot who possesses the qualifications to be awarded or Assigned to a Position or Assignment.
+- Extension = Involuntary Assignment to additional Flight/Duty after last segment of originally scheduled Trip Pairing, within legality and Section 14 limits.
+- FIFO = First In, First Out reserve scheduling per Section 15 for assigning Trips to Reserve Pilots.
+- Final Line/Final Bid Awards = Pilot's final awarded Line after Composite Line construction.
+- First Officer = Second-in-Command; assists/relieves Captain.
+- Flight Time = Brake release to block in (hours/minutes).
+- Furlough = Voluntary/involuntary removal from Active Service due to reduction in force.
+- Ghost Bid = Line a Full-Time Check Airman/Instructor bids for but cannot be awarded; establishes new MPG for the Month.
+- Grievance = Dispute for alleged Company violation(s) of this Agreement.
+- Initial Line Award = Pilot's Line award prior to Integration Period.
+- Junior Assignment (JA) = Involuntary Assignment to Duty on Day Off, inverse Seniority Order (most junior first).
+- Known Flying = All flight segments known before Monthly Initial Line Bid Period begins.
+- LOA = Letter of Agreement — addendum separate from main CBA body.
+- Monthly Bid Period = The bidding cycle each Month per Section 14.
+- Monthly Pay Guarantee (MPG) = Minimum PCH value for all published Initial/Final Lines.
+- MOU = Memorandum of Understanding.
+- Open Time = Trip Pairings/Reserve Assignments not built into Lines or that become available during the Month.
+- PCH = Pay Credit Hours — the unit of compensation.
+- Phantom Award/Phantom Bid = Bidding for Vacancy in higher-paying Position (per seniority) to receive that higher pay rate.
+- Position = Captain or First Officer on a specific Aircraft Type at a Domicile.
+- RAP = Reserve Availability Period (R-1 or R-2 assignment).
+- Regular Line = Planned sequence of Trip Pairings (may include limited R-1 RAPs, max 6).
+- Reserve = Assignment (R-1/R-2/R-3/R-4) where Pilot is available for Company Assignment.
+- R-1 = In-Domicile Short Call Reserve (Duty). R-2 = Out-of-Domicile Short Call Reserve (Duty). R-3 = Long Call Reserve. R-4 = Airport RAP (Duty).
+- Rest Period = Minimum consecutive hours free from Duty between assignments — NOT a Day Off.
+- SAP = Schedule Adjustment Period — process to modify Initial Line Award via Pick-Up and Trade.
+- Seniority = Position on System Seniority List based on length of service from Date of Hire.
+- Split-Trip Pairing = Trip Pairing containing both Flight Segments and a RAP Assignment.
+- TDY = Temporary Duty Vacancy at location other than Pilot's Domicile.
+- Trip Pairing = One or more Duty Periods with any mix of Flight/Deadhead Segments, beginning and ending at Domicile.
+- Trip Rig = Pay credit based on elapsed trip time (as opposed to Duty Rig).
+- Vacancy = An open Position (Domicile/Aircraft Type/Status) to be filled per Section 18.
 
 CURRENT PAY RATE GUIDANCE:
 The contract Date of Signing (DOS) is July 24, 2018. Per Section 3.B.3, Hourly Pay Rates increase by 2% annually on each anniversary of the DOS. As of February 2026, there have been 7 annual increases (July 2019 through July 2025). Therefore: CURRENT RATE = DOS rate from Appendix A × 1.02^7 (which equals × 1.14869). Always use the DOS column from Appendix A, multiply by 1.14869, and show your math. Example: Year 12 B737 Captain DOS rate $189.19 × 1.14869 = $217.33/hour.
@@ -1145,62 +997,6 @@ When the question involves days off, rest periods, scheduling, or duty limits:
 - Note minimum days off requirements for monthly line construction
 - Note rest period requirements between duty assignments
 - Distinguish between "Day Off" (defined term) and "Rest Period" (defined term)
-
-LOA/MOU CROSS-REFERENCE RULE:
-Letters of Agreement (LOAs) and Memorandums of Understanding (MOUs) can MODIFY, SUPPLEMENT, or SUPERSEDE main contract sections. When analyzing any question:
-- Check whether any LOA or MOU in the provided sections addresses the same topic
-- LOA #15 (Section 14 Scheduling) is particularly critical — it rewrites much of the original Section 14
-- MOU #4 (Reserve Reassignment) modifies how reserve pilots can be reassigned between types
-- MOU #7 (Scheduling Definitions) clarifies key terms used in scheduling
-- If an LOA/MOU is present in the provided sections, you MUST reference it in your answer
-- Always note which LOA/MOU number you are citing (e.g., "Per MOU #4, Page 383...")
-
-PROVISION HIERARCHY RULE:
-When provisions from different sources address the same topic, apply this hierarchy:
-1. MOUs (most recent, most specific agreements) take precedence
-2. LOAs (supplemental agreements) take precedence over the main contract
-3. Specific provisions override general provisions
-4. Later-dated provisions override earlier ones on the same topic
-5. If two provisions genuinely conflict and no hierarchy resolves it, flag this explicitly as AMBIGUOUS
-Always state which provision you are applying and why it takes precedence if multiple apply.
-
-SCENARIO DECOMPOSITION RULE:
-For complex questions that involve multiple issues, break the analysis into sub-questions:
-1. Identify each distinct issue in the question (e.g., pay + scheduling + reserve status)
-2. Address each sub-question with its own contract citations
-3. Show how the sub-answers interact or combine
-4. Provide a final synthesized answer
-Example: "What happens if an R-1 pilot works past midnight into his Day Off?" breaks into: (a) What are the extension rules? (b) Does the 0200 LDT rule apply? (c) Is overtime premium triggered? (d) What about the one-extension-per-month limit?
-
-CONTRACT SILENCE DETECTION RULE:
-If the provided contract sections do not contain language that addresses the question:
-- Say "The contract is SILENT on this topic" — do NOT guess or infer what the contract "probably" says
-- Do NOT fill gaps with "common industry practice" or "typical airline contracts"
-- Do NOT say "the contract likely..." or "it is reasonable to assume..."
-- Instead, identify the closest related provisions and explain what the contract DOES say about related topics
-- Flag any areas where the absence of language itself may be significant
-
-TEMPORAL/SEQUENCE ANALYSIS RULE:
-When a question involves events that happen over time (e.g., a duty period that spans multiple days, or a sequence of assignments):
-- Build an explicit timeline showing when each event occurs
-- Identify which contract provisions apply at each point in the timeline
-- Note when a pilot transitions between different statuses (on duty → rest → day off)
-- Flag any gaps or overlaps where provisions might conflict
-Example timeline format: "RAP begins 0600 → Called at 0900 → Departs 1100 → Lands 2300 → Released 2330 → Next Day is Day Off"
-
-CONFLICT DETECTION RULE:
-When you identify provisions that appear to conflict or create ambiguity:
-- Quote both provisions with full citations
-- Explain specifically how they conflict
-- Check whether an LOA, MOU, or hierarchy rule resolves the conflict
-- If unresolved, flag it clearly: "⚠️ PROVISION CONFLICT: [Section X] states [...] while [Section Y] states [...]. This creates ambiguity that may require grievance or arbitration to resolve."
-
-MISSING INFORMATION RULE:
-At the end of every answer, identify what additional information would change or complete the analysis:
-- What facts about the pilot's specific situation are missing?
-- What contract provisions might apply but were not in the provided sections?
-- What additional details would resolve any ambiguity?
-Format: "ℹ️ ADDITIONAL INFORMATION NEEDED: [list specific missing facts]"
 
 STATUS DETERMINATION:
 After your analysis, assign one of these statuses:
@@ -1357,7 +1153,7 @@ if not st.session_state.authenticated:
         submitted = st.form_submit_button("Login", type="primary")
         if submitted:
             try:
-                correct_password = os.environ.get("APP_PASSWORD") or st.secrets["APP_PASSWORD"]
+                correct_password = st.secrets["APP_PASSWORD"]
             except:
                 correct_password = "nacpilot2026"
             if password == correct_password:
