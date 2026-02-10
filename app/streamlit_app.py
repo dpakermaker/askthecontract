@@ -523,7 +523,7 @@ class SemanticCache:
             self._init_turso()
         else:
             self._http_url = ''
-            st.write("[Cache] No Turso credentials — memory-only mode")
+            print("[Cache] No Turso credentials — memory-only mode")
 
     def _turso_request(self, statements):
         """Send SQL statements to Turso via HTTP API."""
@@ -551,10 +551,10 @@ class SemanticCache:
                 return json.loads(resp.read().decode('utf-8'))
         except urllib.request.HTTPError as e:
             error_body = e.read().decode('utf-8') if e.fp else 'no body'
-            st.write(f"[Cache] Turso HTTP {e.code}: {error_body[:200]}")
+            print(f"[Cache] Turso HTTP {e.code}: {error_body[:200]}")
             return None
         except Exception as e:
-            st.write(f"[Cache] Turso error: {e}")
+            print(f"[Cache] Turso error: {e}")
             return None
 
     def _init_turso(self):
@@ -577,11 +577,11 @@ class SemanticCache:
                 self._turso_available = True
                 self._load_from_turso()
                 total = sum(len(v) for v in self._entries.values())
-                st.write(f"[Cache] ✅ Turso connected — loaded {total} cached answers")
+                print(f"[Cache] ✅ Turso connected — loaded {total} cached answers")
             else:
-                st.write("[Cache] Turso init failed — memory-only mode")
+                print("[Cache] Turso init failed — memory-only mode")
         except Exception as e:
-            st.write(f"[Cache] Turso init error: {e} — memory-only mode")
+            print(f"[Cache] Turso init error: {e} — memory-only mode")
 
     def _load_from_turso(self):
         """Load all cached entries from Turso into memory."""
@@ -612,7 +612,7 @@ class SemanticCache:
                 if len(self._entries[contract_id]) < self.MAX_ENTRIES:
                     self._entries[contract_id].append((embedding, question, answer, status, response_time))
         except Exception as e:
-            st.write(f"[Cache] Failed to load from Turso: {e}")
+            print(f"[Cache] Failed to load from Turso: {e}")
 
     def _save_to_turso(self, embedding, question, answer, status, response_time, contract_id):
         """Persist a new cache entry to Turso via HTTP API."""
@@ -634,7 +634,7 @@ class SemanticCache:
             }
             self._turso_request([stmt])
         except Exception as e:
-            st.write(f"[Cache] Failed to save to Turso: {e}")
+            print(f"[Cache] Failed to save to Turso: {e}")
 
     def lookup(self, embedding, contract_id):
         embedding = np.array(embedding, dtype=np.float32)
@@ -685,7 +685,7 @@ class SemanticCache:
                     stmt = "DELETE FROM answer_cache"
                 self._turso_request([stmt])
             except Exception as e:
-                st.write(f"[Cache] Failed to clear Turso: {e}")
+                print(f"[Cache] Failed to clear Turso: {e}")
 
     def stats(self):
         total = sum(len(v) for v in self._entries.values())
