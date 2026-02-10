@@ -1197,6 +1197,72 @@ PROVISION_CHAINS = {
     # NRFO → Section 3.L
     'nrfo': [58],
     'non-routine': [58],
+    # Deadhead pay/rules → Section 3.I, 3.K
+    'deadhead': [56, 57],
+    'deadhead pay': [56, 57],
+    'deadhead rest': [56, 57, 154, 155],
+    'positioning': [56, 57],
+    # Open time / VPA → Section 14.M, 14.N
+    'open time': [183, 184, 185, 186],
+    'vpa': [183, 184, 185, 186],
+    'voluntary pickup': [183, 184, 185, 186],
+    'pick up': [183, 184, 185, 186],
+    'trip trade': [183, 184],
+    # Per diem → Section 3.J
+    'per diem': [57, 58],
+    'meal allowance': [57, 58],
+    'meal money': [57, 58],
+    'hotel': [57, 58],
+    'lodging': [57, 58],
+    # Sick leave → Section 10
+    'sick': [131, 132, 133, 134, 135, 136, 137],
+    'sick call': [131, 132, 133, 134, 135],
+    'sick pay': [131, 132, 133, 134],
+    'calling in sick': [131, 132, 133],
+    'illness': [131, 132, 133, 134],
+    # Furlough / recall → Section 18
+    'furlough': [204, 205, 206, 207, 208, 209, 210],
+    'recall': [204, 205, 206, 207, 208, 209, 210],
+    'layoff': [204, 205, 206, 207],
+    'reduction in force': [204, 205, 206],
+    # Probation / new hire → Section 18
+    'probation': [204, 205, 211, 212],
+    'probationary': [204, 205, 211, 212],
+    'new hire': [204, 205, 211, 212],
+    # Training → Section 12
+    'training pay': [145, 146, 147, 148, 322, 323, 390],
+    'recurrent': [145, 146, 147, 148],
+    'check ride': [145, 146, 147, 148, 322, 323],
+    'simulator': [145, 146, 147, 148],
+    'ground school': [145, 146, 147],
+    'initial operating': [145, 146, 147, 148],
+    'ioe': [145, 146, 147, 148],
+    # Insurance / benefits → Section 9
+    'health insurance': [86, 87, 88, 89, 90],
+    '401k': [95, 96, 97, 98],
+    '401(k)': [95, 96, 97, 98],
+    'life insurance': [91, 92, 93],
+    'disability': [93, 94],
+    'dental': [86, 87, 88],
+    'vision': [86, 87, 88],
+    # Upgrade / downgrade
+    'upgrade': [204, 205, 206, 391],
+    'downgrade': [204, 205, 206, 391],
+    'bid for captain': [204, 205, 206],
+    # Commuting
+    'commut': [56, 57, 154, 155],
+    'commuter policy': [56, 57],
+    # Direct Section references by number
+    'section 3': [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63],
+    'section 8': [105, 106, 107, 108, 109, 110, 111, 112, 113],
+    'section 9': [86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98],
+    'section 10': [131, 132, 133, 134, 135, 136, 137],
+    'section 12': [145, 146, 147, 148, 149, 150],
+    'section 13': [151, 152, 153, 154, 155, 156, 157, 158],
+    'section 14': [160, 161, 168, 169, 170, 171, 172, 173, 177, 180, 181, 185, 188, 190],
+    'section 15': [193, 194, 195, 196, 197, 198, 199, 200],
+    'section 18': [204, 205, 206, 207, 208, 209, 210, 211, 212, 213],
+    'section 19': [216, 217, 218, 219, 220, 221, 222, 223, 224, 225],
     # Direct MOU references by number
     'mou #1': [379],
     'mou #2': [381],
