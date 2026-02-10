@@ -616,7 +616,7 @@ class SemanticCache:
             return
         import base64 as b64module
         try:
-            emb_b64 = b64module.b64encode(embedding.astype(np.float32).tobytes()).decode('ascii')
+            emb_b64 = b64module.b64encode(np.array(embedding, dtype=np.float32).tobytes()).decode('ascii')
             stmt = {
                 "sql": "INSERT INTO answer_cache (contract_id, question, answer, status, response_time, embedding_b64) VALUES (?, ?, ?, ?, ?, ?)",
                 "args": [
@@ -633,6 +633,7 @@ class SemanticCache:
             st.write(f"[Cache] Failed to save to Turso: {e}")
 
     def lookup(self, embedding, contract_id):
+        embedding = np.array(embedding, dtype=np.float32)
         with self._lock:
             entries = self._entries.get(contract_id, [])
             best_score = 0
@@ -647,6 +648,7 @@ class SemanticCache:
             return best_result
 
     def store(self, embedding, question, answer, status, response_time, contract_id):
+        embedding = np.array(embedding, dtype=np.float32)
         with self._lock:
             if contract_id not in self._entries:
                 self._entries[contract_id] = []
