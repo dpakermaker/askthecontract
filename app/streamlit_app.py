@@ -1661,7 +1661,8 @@ OVERTIME PREMIUM (Section 3.Q.1):
 150% pay for duty on scheduled Day Off applies ONLY when caused by: (a) circumstances beyond Company control (weather, mechanical, ATC, customer accommodation), OR (b) assignment to remain with aircraft for repairs.
 - If cause is NOT stated: quote trigger conditions, present 150% as CONDITIONAL, mark AMBIGUOUS
 - Do NOT automatically apply 150% without a stated trigger
-- OVERTIME SCOPE DISPUTE (REQUIRED when duty spans workday + Day Off): "⚠️ OVERTIME SCOPE DISPUTE: Even if the 150% premium applies, the contract does not specify whether it covers all PCH earned in the duty period or only the PCH attributable to the Day Off hours. Both interpretations are reasonable, and this is a potential area of dispute."
+- OVERTIME SCOPE DISPUTE (REQUIRED ONLY when a single duty period begins on a workday and extends into a Day Off): "⚠️ OVERTIME SCOPE DISPUTE: Even if the 150% premium applies, the contract does not specify whether it covers all PCH earned in the duty period or only the PCH attributable to the Day Off hours. Both interpretations are reasonable, and this is a potential area of dispute."
+  Do NOT include this dispute paragraph when duty is entirely on a Day Off (e.g., Junior Assignment, full Day Off duty). The scope dispute only exists when there is a split between workday hours and Day Off hours within the same duty period.
 
 RESERVE PAY:
 - R-1 and R-2 are DUTY — duty starts at scheduled RAP DOT, not when called or when flight departs
@@ -1684,7 +1685,7 @@ RESPONSE FORMAT:
 (Repeat for each provision)
 📝 EXPLANATION: [Plain English analysis]
   Include ⏰ EXTENSION / DAY OFF DUTY ANALYSIS when duty crosses past RAP or into Day Off
-  Include ⚠️ OVERTIME SCOPE DISPUTE when overtime + Day Off overlap
+  Include ⚠️ OVERTIME SCOPE DISPUTE only when duty starts on a workday and extends into a Day Off (not for pure Day Off duty like JA)
 🔵 STATUS: [CLEAR/AMBIGUOUS/NOT ADDRESSED] - [One sentence justification]
 ⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.
 
@@ -2162,10 +2163,105 @@ def tier1_instant_answer(question_lower):
     return None
 
 # ============================================================
+# QUESTION PREPROCESSOR
+# Normalizes pilot shorthand, abbreviations, and slang before
+# the question hits Tier 1, BM25, embeddings, and the API.
+# ============================================================
+
+# Order matters: longer patterns first to avoid partial replacements
+_SHORTHAND_MAP = [
+    # Contractions and informal
+    (r"\bwhats\b", "what is"),
+    (r"\bwhat's\b", "what is"),
+    (r"\bhow's\b", "how is"),
+    (r"\bcan't\b", "cannot"),
+    (r"\bdon't\b", "do not"),
+    (r"\bdoesn't\b", "does not"),
+    (r"\bwon't\b", "will not"),
+    (r"\bdidn't\b", "did not"),
+    (r"\bwasn't\b", "was not"),
+    (r"\bi'm\b", "i am"),
+    (r"\bi've\b", "i have"),
+    (r"\bi'd\b", "i would"),
+    # Pilot shorthand — positions
+    (r"\bca\b", "captain"),
+    (r"\bcapt\b", "captain"),
+    (r"\bfo\b", "first officer"),
+    (r"\bf/o\b", "first officer"),
+    (r"\bpic\b", "pilot in command"),
+    (r"\bsic\b", "second in command"),
+    # Reserve types
+    (r"\br1\b", "r-1"),
+    (r"\br2\b", "r-2"),
+    (r"\br3\b", "r-3"),
+    (r"\br4\b", "r-4"),
+    # Pilot shorthand — operations
+    (r"\bja'd\b", "junior assigned"),
+    (r"\bja'ed\b", "junior assigned"),
+    (r"\bjaed\b", "junior assigned"),
+    (r"\bja\b", "junior assignment"),
+    (r"\bext'd\b", "extended"),
+    (r"\bexted\b", "extended"),
+    (r"\bdeadhd\b", "deadhead"),
+    (r"\bdh\b", "deadhead"),
+    (r"\bd/h\b", "deadhead"),
+    (r"\bmx\b", "mechanical"),
+    (r"\bmech\b", "mechanical"),
+    (r"\bpax\b", "passenger"),
+    (r"\bsked\b", "schedule"),
+    (r"\bskd\b", "schedule"),
+    (r"\bdom\b", "domicile"),
+    (r"\bvac\b", "vacation"),
+    (r"\bprobat\b", "probation"),
+    (r"\bgriev\b", "grievance"),
+    # Time/pay shorthand
+    (r"\byr\b", "year"),
+    (r"\byrs\b", "years"),
+    (r"\bhr\b", "hour"),
+    (r"\bhrs\b", "hours"),
+    (r"\bmin\b(?!imum)", "minutes"),
+    (r"\bmos?\b", "months"),
+    (r"\bOT\b", "overtime"),
+    (r"\bot\b", "overtime"),
+    # Contract references
+    (r"\bsect\b", "section"),
+    (r"\bsec\b", "section"),
+    (r"\bart\b", "article"),
+    (r"\bloa\b", "loa"),
+    (r"\bmou\b", "mou"),
+    (r"\bjcba\b", "contract"),
+    (r"\bcba\b", "contract"),
+    # Aircraft
+    (r"\b73\b", "b737"),
+    (r"\b737\b", "b737"),
+    (r"\b76\b", "b767"),
+    (r"\b767\b", "b767"),
+    # Common misspellings
+    (r"\bscheudle\b", "schedule"),
+    (r"\bschedual\b", "schedule"),
+    (r"\bgrievence\b", "grievance"),
+    (r"\bgreivance\b", "grievance"),
+    (r"\bassigment\b", "assignment"),
+    (r"\breassigment\b", "reassignment"),
+]
+
+# Pre-compile patterns for performance
+_SHORTHAND_COMPILED = [(re.compile(pattern, re.IGNORECASE), replacement) for pattern, replacement in _SHORTHAND_MAP]
+
+def preprocess_question(question_text):
+    """Normalize pilot shorthand and abbreviations for better matching."""
+    result = question_text
+    for pattern, replacement in _SHORTHAND_COMPILED:
+        result = pattern.sub(replacement, result)
+    # Collapse multiple spaces
+    result = re.sub(r'  +', ' ', result).strip()
+    return result
+
+# ============================================================
 # MAIN ENTRY
 # ============================================================
 def ask_question(question, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name, conversation_history=None):
-    normalized = question.strip().lower()
+    normalized = preprocess_question(question.strip()).lower()
 
     # Tier 1: Instant answers — no API cost, no embedding cost
     tier1_result = tier1_instant_answer(normalized)
