@@ -939,6 +939,7 @@ def init_contract_manager():
     return ContractManager()
 
 @st.cache_resource
+@st.cache_resource
 def init_logger():
     return ContractLogger()
 
@@ -2549,7 +2550,8 @@ def _load_top_questions():
         logger = init_logger()
         contract_id = st.session_state.get('selected_contract')
         return logger.get_top_questions(5, contract_id=contract_id)
-    except:
+    except Exception as e:
+        print(f"[TopQ] Error loading top questions: {e}")
         return []
 
 def render_analytics_dashboard():
