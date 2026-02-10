@@ -1106,10 +1106,215 @@ Answer:"""
     return answer, status, response_time
 
 # ============================================================
+# TIER 1 — INSTANT ANSWERS (FREE, NO API CALL)
+# ============================================================
+
+# DOS rates from Appendix A (July 24, 2018)
+PAY_RATES_DOS = {
+    'B737': {
+        'Captain': {1: 133.08, 2: 137.40, 3: 141.87, 4: 146.48, 5: 151.24, 6: 156.16, 7: 161.23, 8: 166.47, 9: 171.88, 10: 177.47, 11: 183.23, 12: 189.19},
+        'First Officer': {1: 83.73, 2: 88.25, 3: 92.97, 4: 97.91, 5: 103.07, 6: 108.46, 7: 114.09, 8: 119.98, 9: 123.87, 10: 127.90, 11: 132.06, 12: 136.34},
+    }
+}
+
+# 2% annual increase: DOS July 24, 2018. As of Feb 2026 = 7 increases (Jul 2019–Jul 2025)
+PAY_MULTIPLIER = 1.02 ** 7  # 1.14868567
+PAY_INCREASES = 7
+
+# Contract definitions for instant lookup
+DEFINITIONS_LOOKUP = {
+    'active service': 'A Pilot who is available for an Assignment, on Sick Leave, Vacation or for any Leaves of Absence where and to the extent that Longevity is accrued for any part of a Month. Periods of Furlough or for Leaves of Absence where Longevity is not accrued, do not constitute Active Service.',
+    'agreement': 'This Collective Bargaining Agreement, including any Side Letters to this Agreement; Memorandum of Understanding and Letters of Agreement made contemporaneous with or expressly part of this Collective Bargaining Agreement.',
+    'aircraft type': 'A specific make and model aircraft, as defined by the FARs.',
+    'assignment': '1) A Flight Assignment, Reserve Period, Training or any other activity that is directed by the Company. 2) An awarded or Assigned Vacancy (Domicile or Position).',
+    'block time': 'The time when an aircraft\'s brakes are released for push back or taxi to the time when an aircraft\'s brakes are set at the end of operation.',
+    'captain': 'A Pilot who is in command of an aircraft (i.e., Pilot in Command) and is responsible for the manipulation of, or who manipulates the flight controls of an aircraft while under way, including takeoff and landing of such aircraft, and who is properly qualified to serve as, and holds a current airman\'s certificate authorizing service as a Captain and who holds a Captain bid status.',
+    'check airman': 'A Pilot who is approved by the Company and the FAA to perform instruction, Training and Checking Events in an aircraft, Simulator or classroom.',
+    'composite line': 'A line published as a blank line in the Bid Package. After SAP is completed the Composite Line is constructed by the Company of any combination of Duty and Duty-free times.',
+    'daily pay guarantee': 'The minimum pay a Pilot receives for a Day of scheduled Duty or other Company-Directed Assignment. Three and eighty-two hundredths hours (3.82) PCH.',
+    'dpg': 'Daily Pay Guarantee. The minimum pay a Pilot receives for a Day of scheduled Duty or other Company-Directed Assignment. Three and eighty-two hundredths hours (3.82) PCH.',
+    'day': 'A Calendar Day (00:00-23:59:59) in Local Domicile Time (LDT).',
+    'day off': 'A scheduled Day free of all Duty, which is taken at a Pilot\'s Domicile.',
+    'deadhead': 'The movement of a Pilot by air or by surface transportation to or from a Flight or other Company-Directed Assignment, as provided in this Agreement.',
+    'domicile': 'A Company designated Airport at which Pilots are based regardless of their actual place of Residence. Pilots based at a Domicile shall have their Duty and other Company-Directed Assignments scheduled to begin and end at that Domicile.',
+    'domicile flex line': 'A Reserve Line with a minimum single block of thirteen (13) consecutive Days Off for a 30-Day Month and fourteen (14) consecutive Days Off in a 31-Day Month. All Workdays are R-1 Reserve Assignments.',
+    'duty': 'An activity Assigned to, scheduled for and/or performed by a Pilot at the direction of the Company. Duty includes Flight Assignments, pre- and post-flight activities, administrative work, Deadhead Transportation, Training, R-1, R-2 or R-4 Reserve, aircraft positioning on the ground, or any other Company-Directed Assignments.',
+    'duty period': 'The continuous period of elapsed time beginning at the time when a Pilot is required to Report for Duty or the actual Report Time, whichever is later, until the time when the Pilot is Released from Duty and placed into Rest.',
+    'duty rig': 'A method used to calculate pay credits as a ratio of the total Duty Period. The ratio is 1:2: One (1) Pay Credit Hour (PCH) for every two (2) hours of Duty, prorated on a minute for minute basis.',
+    'eligible pilot': 'A Pilot who possesses the qualifications to be awarded or Assigned to a Position or to an Assignment.',
+    'eligible dependent': 'Spouse, children, domestic partner or other persons who can be claimed for the purposes of coverage or utilization of benefits, tax calculations or other conditions as provided in this Agreement or applicable Law.',
+    'extension': 'An Involuntary Assignment to a Flight Segment(s) or other Duty after the last segment of a Pilot\'s originally scheduled Trip Pairing that would not violate the Pilot\'s legality and is within the limitations provided for in Section 14.',
+    'fifo': 'First In - First Out Reserve Scheduling. As provided in Section 15 (Reserves), the process for assigning Trip Pairings and other Company-Directed Assignments to Pilot\'s performing Reserve Assignments.',
+    'first officer': 'A Pilot who is Second-In-Command of the aircraft. Primary responsibilities are to assist or relieve the Captain in navigation, communication and manipulation of aircraft controls while underway.',
+    'flight time': 'The time in hours and minutes from brake release for push back or taxi out until block in.',
+    'furlough': 'The voluntary or involuntary removal of a Pilot from Active Service as a Pilot with the Company due to a reduction in force, or the period of time during which such Pilot has Recall rights back to Active Service.',
+    'ghost bid': 'A Line that a Full-Time Check Airman or Instructor Pilot has bid for, and as a result of his ineligibility to bid for that Month, he shall not be awarded a Line but shall retain such Initial Line\'s PCH for the purpose of establishing his new MPG for that Month.',
+    'grievance': 'A dispute between the Union or Pilot(s) and the Company for alleged Company violation(s) of this Agreement.',
+    'junior assignment': 'The procedure used by Crew Scheduling to involuntarily assign a Pilot to Duty on a Day Off, in inverse Seniority Order, beginning with the most junior available Pilot.',
+    'ja': 'Junior Assignment. The procedure used by Crew Scheduling to involuntarily assign a Pilot to Duty on a Day Off, in inverse Seniority Order, beginning with the most junior available Pilot.',
+    'known flying': 'All Flight Segments known to be performed by the Company prior to the commencement of each Monthly Initial Line Bid Period.',
+    'loa': 'Letter of Agreement: An additional addendum to this Agreement, separate from the main body of this Agreement.',
+    'mou': 'Memorandum of Understanding.',
+    'monthly pay guarantee': 'The minimum PCH value for all published Initial and Final Lines, as provided in Section 3 (Compensation).',
+    'mpg': 'Monthly Pay Guarantee. The minimum PCH value for all published Initial and Final Lines.',
+    'open time': 'Trip Pairings and Reserve Assignments that remain after the publishing of the Final Bid Awards and any new Trip Pairings or Reserve Assignments that become available during the Month.',
+    'pch': 'Pay Credit Hours — the unit of compensation used to calculate pilot pay.',
+    'position': 'A Pilot\'s status (Captain or First Officer) on a specific Aircraft Type at a Domicile.',
+    'rap': 'Reserve Availability Period. An R-1 or R-2 Assignment in a Pilot\'s Bid Line, or an R-4 Assignment in which a Pilot is obligated to remain available to the Company for the purpose of being Assigned a Trip Pairing or any additional Duty.',
+    'regular line': 'A planned sequence of Trip Pairings that also may include Combination Trip Pairings, and a limited number of Reserve Assignments with intervening Days Off.',
+    'reserve': 'An Assignment (R-1, R-2, R-3 or R-4) whereby a Pilot is available to be Assigned by the Company to a Trip Pairing or other Company-Directed Assignment.',
+    'rest period': 'A specific period of time, free from all Duty or other Company-Directed Assignments, between such Assignment and his next scheduled Company-Directed Assignment or between an Assignment and a Layover Period.',
+    'sap': 'Schedule Adjustment Period. As provided in Section 14 (Scheduling) the process during the Monthly Bid Period where a Pilot may modify his Initial Line Award after the Integration procedure through Pick-Up and Trade transactions.',
+    'seniority': 'A Pilot\'s relative position on the NAC System Seniority List, based on his length of service with the Company, starting on his Date of Hire.',
+    'trip pairing': 'A Trip Pairing shall consist of one (1) or more Duty Periods and contain any mixture of Flight and/or Deadhead Segments. Beginning and ending at a Pilot\'s Domicile.',
+    'trip rig': 'Pay credit based on elapsed trip time. Time Away From Domicile (TAFD) divided by 4.9.',
+    'tdy': 'Temporary Duty Vacancy. A temporary Assignment whereby a Pilot may bid and be awarded to a location other than the Pilot\'s Domicile.',
+    'vacancy': 'An open Position (Domicile/Aircraft Type/Status) to be filled per Section 18.',
+}
+
+import re
+
+def _parse_pay_question(question_lower):
+    """Parse a pay rate question and return (aircraft, position, year) or None."""
+    # Extract year
+    year_match = re.search(r'year\s*(\d{1,2})', question_lower)
+    if not year_match:
+        # Try "12 year" or "12-year"
+        year_match = re.search(r'(\d{1,2})[\s-]*year', question_lower)
+    if not year_match:
+        return None
+    year = int(year_match.group(1))
+    if year < 1 or year > 12:
+        return None
+
+    # Extract position
+    if 'captain' in question_lower or 'capt' in question_lower:
+        position = 'Captain'
+    elif 'first officer' in question_lower or 'fo ' in question_lower or 'f/o' in question_lower:
+        position = 'First Officer'
+    else:
+        position = None
+
+    # Extract aircraft — NAC only flies B737
+    aircraft = 'B737'
+
+    return aircraft, position, year
+
+def _format_pay_answer(aircraft, position, year):
+    """Build a formatted pay rate answer matching the app's output style."""
+    # Determine which positions to show
+    if position:
+        combos = [(aircraft, position)]
+    else:
+        combos = [(aircraft, 'Captain'), (aircraft, 'First Officer')]
+
+    rate_lines = []
+    citation_parts = []
+
+    for ac, pos in combos:
+        dos_rate = PAY_RATES_DOS[ac][pos][year]
+        current_rate = round(dos_rate * PAY_MULTIPLIER, 2)
+        citation_parts.append(f'{pos} Year {year}: DOS rate {dos_rate:.2f}')
+        rate_lines.append(f'- {pos} Year {year}: DOS rate {dos_rate:.2f} x 1.02^{PAY_INCREASES} (1.14869) = {current_rate:.2f} per hour')
+
+    citation_text = '; '.join(citation_parts)
+
+    answer = f"""📄 CONTRACT LANGUAGE: "B737 {citation_text}" 📍 Appendix A, Page 66
+
+"On the Amendable Date of this Agreement and every anniversary thereafter until the Effective Date of an amended Agreement, Hourly Pay Rates shall increase by two percent (2%)." 📍 Section 3.B.3, Page 50
+
+📝 EXPLANATION: The contract provides B737 Year {year} pay rates in Appendix A. The Date of Signing (DOS) is July 24, 2018. Per Section 3.B.3, pay rates increase by 2% annually on each anniversary. As of February 2026, there have been {PAY_INCREASES} annual increases (July 2019 through July 2025), so the current rates are:
+
+{chr(10).join(rate_lines)}
+
+🔵 STATUS: CLEAR - The contract explicitly provides the DOS pay rates in Appendix A and the annual increase formula in Section 3.B.3.
+
+⚡ Instant answer from pre-computed pay table (no API cost)
+
+⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes."""
+
+    return answer
+
+def _format_definition_answer(term, definition):
+    """Build a formatted definition answer matching the app's output style."""
+    display_term = term.upper() if len(term) <= 4 else term.title()
+
+    answer = f"""📄 CONTRACT LANGUAGE: "{display_term}: {definition}" 📍 Section 2 (Definitions), Pages 13-45
+
+📝 EXPLANATION: Per Section 2 (Definitions) of the contract, **{display_term}** is defined as: {definition}
+
+🔵 STATUS: CLEAR - The contract explicitly defines this term in Section 2.
+
+⚡ Instant answer from contract definitions (no API cost)
+
+⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes."""
+
+    return answer
+
+def tier1_instant_answer(question_lower):
+    """
+    Check if a question can be answered instantly without API call.
+    Returns (answer, status, response_time) or None if not a Tier 1 question.
+    """
+    start = time.time()
+
+    # --- PAY RATE QUESTIONS ---
+    pay_keywords = ['pay rate', 'hourly rate', 'make per hour', 'paid per hour',
+                    'how much', 'what rate', 'what is the rate', 'what\'s the rate',
+                    'captain rate', 'fo rate', 'first officer rate', 'captain pay',
+                    'fo pay', 'first officer pay', 'pay scale']
+
+    if any(kw in question_lower for kw in pay_keywords):
+        parsed = _parse_pay_question(question_lower)
+        if parsed:
+            aircraft, position, year = parsed
+            answer = _format_pay_answer(aircraft, position, year)
+            return answer, 'CLEAR', round(time.time() - start, 1)
+
+    # Also catch "year X captain/FO" patterns even without explicit pay keywords
+    if re.search(r'year\s*\d{1,2}\s*(captain|capt|first officer|fo |f/o)', question_lower) or \
+       re.search(r'\d{1,2}[\s-]*year\s*(captain|capt|first officer|fo |f/o)', question_lower):
+        parsed = _parse_pay_question(question_lower)
+        if parsed:
+            aircraft, position, year = parsed
+            answer = _format_pay_answer(aircraft, position, year)
+            return answer, 'CLEAR', round(time.time() - start, 1)
+
+    # --- DEFINITION QUESTIONS ---
+    def_patterns = [
+        r'what (?:does|is|are|do)\s+(?:a |an |the )?["\']?(.+?)["\']?\s*(?:mean|stand for|definition)',
+        r'define\s+["\']?(.+?)["\']?\s*$',
+        r'what (?:is|are)\s+(?:a |an |the )?["\']?(.+?)["\']?\s*(?:in the contract|per the contract|according to)',
+        r'what (?:is|are)\s+(?:a |an |the )?["\']?(.+?)["\']?\s*\??\s*$',
+    ]
+
+    for pattern in def_patterns:
+        match = re.search(pattern, question_lower.strip().rstrip('?'))
+        if match:
+            term = match.group(1).strip().lower()
+            # Remove trailing words that aren't part of the term
+            term = re.sub(r'\s+(mean|means|stand|stands|defined|definition).*$', '', term)
+            if term in DEFINITIONS_LOOKUP:
+                answer = _format_definition_answer(term, DEFINITIONS_LOOKUP[term])
+                return answer, 'CLEAR', round(time.time() - start, 1)
+            # Try partial match for multi-word terms
+            for def_term, definition in DEFINITIONS_LOOKUP.items():
+                if term == def_term or (len(term) > 3 and term in def_term):
+                    answer = _format_definition_answer(def_term, definition)
+                    return answer, 'CLEAR', round(time.time() - start, 1)
+
+    return None
+
+# ============================================================
 # MAIN ENTRY
 # ============================================================
 def ask_question(question, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name, conversation_history=None):
     normalized = question.strip().lower()
+
+    # Tier 1: Instant answers — no API cost, no embedding cost
+    tier1_result = tier1_instant_answer(normalized)
+    if tier1_result is not None:
+        return tier1_result
 
     # Always check cache first — regardless of conversation history
     question_embedding = get_embedding_cached(normalized, openai_client)
