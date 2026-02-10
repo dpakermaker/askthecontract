@@ -980,8 +980,154 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
     return merged
 
 # ============================================================
-# API CALL
+# PRE-COMPUTED PAY CALCULATOR
+# Extracts scenario details, does all math locally, injects
+# results into API call so Sonnet explains — never calculates.
 # ============================================================
+def _build_pay_reference(question):
+    """Extract pay scenario details and pre-compute all applicable pay values.
+    Returns a text block to inject into the API call, or empty string."""
+    q = question.lower()
+
+    # Only trigger for pay-related questions
+    pay_triggers = ['pay', 'paid', 'compensation', 'make', 'earn', 'rate', 'rig',
+                    'dpg', 'premium', 'overtime', 'pch', 'wage', 'salary',
+                    'junior assignment', 'ja ', 'open time', 'day off']
+    if not any(t in q for t in pay_triggers):
+        return ""
+
+    # Extract position
+    if 'captain' in q or 'capt ' in q:
+        positions = ['Captain']
+    elif 'first officer' in q or 'fo ' in q or 'f/o' in q:
+        positions = ['First Officer']
+    else:
+        positions = ['Captain', 'First Officer']
+
+    # Extract year
+    year_match = re.search(r'year\s*(\d{1,2})', q)
+    if not year_match:
+        year_match = re.search(r'(\d{1,2})[\s-]*year', q)
+    year = int(year_match.group(1)) if year_match and 1 <= int(year_match.group(1)) <= 12 else None
+
+    # Extract numeric values for duty hours, block time, TAFD
+    duty_hours = None
+    block_hours = None
+    tafd_hours = None
+
+    # "12 hour duty" or "duty of 12 hours" or "12-hour duty day"
+    duty_match = re.search(r'(\d+(?:\.\d+)?)\s*[\s-]*hours?\s*(?:of\s+)?(?:duty|on duty|duty day|duty period)', q)
+    if not duty_match:
+        duty_match = re.search(r'duty\s*(?:of|period|day|time)?\s*(?:of|is|was|:)?\s*(\d+(?:\.\d+)?)\s*hours?', q)
+    if duty_match:
+        duty_hours = float(duty_match.group(1))
+
+    # "block time of 5 hours" or "5 hours of block" or "flew 5 hours"
+    block_match = re.search(r'(\d+(?:\.\d+)?)\s*hours?\s*(?:of\s+)?(?:block|flight|flying|flew)', q)
+    if not block_match:
+        block_match = re.search(r'(?:block|flight|flew)\s*(?:time)?\s*(?:of|is|was|:)?\s*(\d+(?:\.\d+)?)\s*hours?', q)
+    if block_match:
+        block_hours = float(block_match.group(1))
+
+    # "TAFD of 24 hours" or "24 hours TAFD" or "away from domicile for 24 hours"
+    tafd_match = re.search(r'(\d+(?:\.\d+)?)\s*hours?\s*(?:tafd|away from domicile|time away)', q)
+    if not tafd_match:
+        tafd_match = re.search(r'(?:tafd|time away|away from domicile)\s*(?:of|is|was|:)?\s*(\d+(?:\.\d+)?)\s*hours?', q)
+    if tafd_match:
+        tafd_hours = float(tafd_match.group(1))
+
+    # Detect premium scenarios
+    premiums = {}
+    if 'junior assign' in q or 'ja ' in q or ' ja' in q:
+        premiums['Junior Assignment 1st in 3mo (200%)'] = 2.00
+        premiums['Junior Assignment 2nd in 3mo (250%)'] = 2.50
+    if 'open time' in q and ('pick' in q or 'award' in q or 'volunt' in q):
+        premiums['Open Time Pickup (150%)'] = 1.50
+    if 'vacation' in q and ('cancel' in q or 'work' in q):
+        premiums['Vacation Cancellation Work (200%)'] = 2.00
+    if 'check airman' in q or 'instructor' in q or 'apd' in q:
+        if 'day off' in q or 'day-off' in q:
+            premiums['Check Airman Admin on Day Off (175%)'] = 1.75
+    if 'hostile' in q:
+        premiums['Hostile Area (200%)'] = 2.00
+
+    # If we have no year and no numeric values, just provide rate table reference
+    has_scenario = duty_hours or block_hours or tafd_hours
+    if not year and not has_scenario:
+        return ""
+
+    # Build the reference
+    lines = ["PRE-COMPUTED PAY REFERENCE (use these exact numbers — do not recalculate):"]
+    lines.append(f"Current pay multiplier: DOS rate x 1.02^{PAY_INCREASES} = DOS x {PAY_MULTIPLIER:.5f}")
+    lines.append("")
+
+    # Show rates for applicable positions
+    years_to_show = [year] if year else list(range(1, 13))
+    for pos in positions:
+        for y in years_to_show:
+            dos = PAY_RATES_DOS['B737'][pos][y]
+            current = round(dos * PAY_MULTIPLIER, 2)
+            lines.append(f"B737 {pos} Year {y}: DOS {dos:.2f} → Current {current:.2f}/hour")
+
+    # If scenario has numbers, compute all pay guarantees
+    if has_scenario and year:
+        lines.append("")
+        lines.append("PAY CALCULATIONS FOR THIS SCENARIO:")
+        for pos in positions:
+            dos = PAY_RATES_DOS['B737'][pos][year]
+            rate = round(dos * PAY_MULTIPLIER, 2)
+            lines.append(f"  {pos} Year {year} rate: {rate:.2f}/hour")
+
+            calcs = []
+
+            if block_hours is not None:
+                val = round(block_hours * rate, 2)
+                calcs.append(f"    Block Time: {block_hours} PCH x {rate:.2f} = {val:.2f}")
+
+            # DPG always applies
+            dpg_val = round(3.82 * rate, 2)
+            calcs.append(f"    DPG (minimum): 3.82 PCH x {rate:.2f} = {dpg_val:.2f}")
+
+            if duty_hours is not None:
+                rig_pch = round(duty_hours / 2, 2)
+                rig_val = round(rig_pch * rate, 2)
+                calcs.append(f"    Duty Rig: {duty_hours} hrs / 2 = {rig_pch} PCH x {rate:.2f} = {rig_val:.2f}")
+
+            if tafd_hours is not None:
+                trip_pch = round(tafd_hours / 4.9, 2)
+                trip_val = round(trip_pch * rate, 2)
+                calcs.append(f"    Trip Rig: {tafd_hours} hrs / 4.9 = {trip_pch} PCH x {rate:.2f} = {trip_val:.2f}")
+
+            # Determine greatest PCH
+            pch_values = {'DPG': 3.82}
+            if block_hours is not None:
+                pch_values['Block Time'] = block_hours
+            if duty_hours is not None:
+                pch_values['Duty Rig'] = round(duty_hours / 2, 2)
+            if tafd_hours is not None:
+                pch_values['Trip Rig'] = round(tafd_hours / 4.9, 2)
+
+            best_name = max(pch_values, key=pch_values.get)
+            best_pch = pch_values[best_name]
+            best_pay = round(best_pch * rate, 2)
+
+            for c in calcs:
+                lines.append(c)
+            lines.append(f"    → GREATEST: {best_name} = {best_pch} PCH = {best_pay:.2f} at 100%")
+
+            # Apply premiums
+            if premiums:
+                lines.append("")
+                lines.append("    WITH PREMIUMS:")
+                for prem_name, mult in premiums.items():
+                    prem_pay = round(best_pch * rate * mult, 2)
+                    lines.append(f"    {prem_name}: {best_pch} PCH x {rate:.2f} x {mult} = {prem_pay:.2f}")
+
+            lines.append("")
+
+    return "\n".join(lines)
+
+
 def _ask_question_api(question, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name, conversation_history=None):
     start_time = time.time()
 
@@ -1086,8 +1232,8 @@ These are official contract definitions from Section 2. Always use these meaning
 - Vacancy = An open Position (Domicile/Aircraft Type/Status) to be filled per Section 18.
 
 CURRENT PAY RATE GUIDANCE:
-The contract Date of Signing (DOS) is July 24, 2018. Per Section 3.B.3, Hourly Pay Rates increase by 2% annually on each anniversary of the DOS. As of February 2026, there have been 7 annual increases (July 2019 through July 2025). Therefore: CURRENT RATE = DOS rate from Appendix A × 1.02^7 (which equals × 1.14869). Always use the DOS column from Appendix A, multiply by 1.14869, and show your math. Example: Year 12 B737 Captain DOS rate $189.19 × 1.14869 = $217.33/hour.
-MANDATORY: If the Appendix A DOS rate appears in the provided contract sections, you MUST calculate and display the final dollar amount. If the pilot's longevity year is stated (e.g., "12 year captain"), look for that rate in Appendix A, apply the 1.14869 multiplier, and show the final pay in dollars. Do NOT say you cannot find the rate if a longevity year is provided — use the Appendix A data in the provided sections. If the specific rate truly does not appear in any provided section, use the example rate ($189.19 for Year 12 B737 Captain) and note it as an example.
+The contract Date of Signing (DOS) is July 24, 2018. Per Section 3.B.3, Hourly Pay Rates increase by 2% annually on each anniversary of the DOS. As of February 2026, there have been 7 annual increases (July 2019 through July 2025). Therefore: CURRENT RATE = DOS rate from Appendix A × 1.02^7 (which equals × 1.14869). Always use the DOS column from Appendix A, multiply by 1.14869, and show your math. Example: Year 12 B737 Captain DOS rate 189.19 × 1.14869 = 217.33/hour.
+MANDATORY: If the Appendix A DOS rate appears in the provided contract sections, you MUST calculate and display the final dollar amount. If the pilot's longevity year is stated (e.g., "12 year captain"), look for that rate in Appendix A, apply the 1.14869 multiplier, and show the final pay. Do NOT say you cannot find the rate if a longevity year is provided — use the Appendix A data in the provided sections. If the specific rate truly does not appear in any provided section, use the example rate (189.19 for Year 12 B737 Captain) and note it as an example.
 
 PAY QUESTION RULES:
 When the question involves pay or compensation, you MUST:
@@ -1100,9 +1246,10 @@ When the question involves pay or compensation, you MUST:
   * Scheduled PCH if provided in the scenario
   * Overtime Premium: PCH multiplied by hourly rate multiplied by 1.5 — BUT ONLY when trigger conditions are met (see OVERTIME PREMIUM RULES below)
 - Show all math step by step — PCH values AND dollar amounts for EVERY calculation
+- FORMATTING: Do NOT use dollar signs ($) in your response — Streamlit renders them as LaTeX. Instead write amounts as plain numbers like 191.22/hour or 1,147.32 total.
 - Quote the contract language that defines each calculation
 - State which calculation the contract says applies, or if the contract does not specify
-- ALWAYS end pay analysis with a clear summary: "The pilot should be paid [X] PCH × $[rate] = $[total]"
+- ALWAYS end pay analysis with a clear summary: "The pilot should be paid [X] PCH × [rate] = [total]"
 
 MANDATORY PAY COMPARISON TABLE:
 Every pay answer MUST include a numbered comparison of ALL four calculations. Do NOT skip any. Use this exact format:
@@ -1232,8 +1379,14 @@ IMPORTANT REMINDERS:
 {context}
 
 QUESTION: {question}
+"""
 
-Answer:"""
+    # Inject pre-computed pay reference if applicable
+    pay_ref = _build_pay_reference(question)
+    if pay_ref:
+        user_content += f"\n{pay_ref}\n"
+
+    user_content += "\nAnswer:"
 
     messages.append({"role": "user", "content": user_content})
 
@@ -1415,6 +1568,16 @@ def tier1_instant_answer(question_lower):
     Returns (answer, status, response_time) or None if not a Tier 1 question.
     """
     start = time.time()
+
+    # --- SCENARIO DETECTION: If question has duty/block/TAFD numbers, skip Tier 1 ---
+    # These need the full API with pre-computed pay calculator
+    scenario_indicators = ['duty', 'block', 'tafd', 'flew', 'flying', 'flight time',
+                           'time away', 'junior assign', 'ja ', 'open time pick',
+                           'extension', 'reassign', 'day off', 'overtime',
+                           'hour duty', 'hour block', 'hours of duty', 'hours of block']
+    has_scenario = any(s in question_lower for s in scenario_indicators)
+    if has_scenario:
+        return None
 
     # --- PAY RATE QUESTIONS ---
     pay_keywords = ['pay rate', 'hourly rate', 'make per hour', 'paid per hour',
