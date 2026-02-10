@@ -2589,7 +2589,7 @@ if 'ratings' not in st.session_state:
 # ============================================================
 if not st.session_state.authenticated:
     st.title("✈️ AskTheContract - Beta Access")
-    st.write("**AI-Powered Contract Q&A for Pilots**")
+    st.write("**Contract Language Search Engine for Pilots**")
 
     with st.form("login_form"):
         password = st.text_input("Enter beta password:", type="password")
@@ -2611,7 +2611,8 @@ if not st.session_state.authenticated:
 # ============================================================
 else:
     st.title("✈️ AskTheContract")
-    st.caption("AI-Powered Contract Q&A System")
+    st.markdown("**Search and retrieve exact contract language with page and section references.**")
+    st.caption("Provides a plain-language summary of the relevant contract text and highlights whether the language appears clear or ambiguous.")
 
     # ---- SIDEBAR ----
     with st.sidebar:
@@ -2669,7 +2670,7 @@ else:
             st.rerun()
 
     # ---- MAIN CONTENT ----
-    st.info(f"📋 This tool searches **only** the **{airline_name} Pilot Contract (JCBA)**. It does not cover FAA regulations (FARs), Company Operations Manuals, or other policies.")
+    st.info(f"Limited to the {airline_name} Pilot Contract (JCBA). Does not reference FAA regulations, company manuals, or other policies.")
 
     # Show Quick Reference Card if selected
     if st.session_state.show_reference:
@@ -2788,4 +2789,3 @@ This is not legal advice."""
             st.write("---")
 
     # ---- FOOTER ----
-    st.caption("⚠️ **Disclaimer:** This tool searches only the pilot union contract (JCBA). It does not cover FAA regulations, company manuals, or other policies. This is not legal advice. Consult your union representative.")
