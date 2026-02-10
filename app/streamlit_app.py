@@ -549,8 +549,12 @@ class SemanticCache:
         try:
             with urllib.request.urlopen(req, timeout=10) as resp:
                 return json.loads(resp.read().decode('utf-8'))
+        except urllib.request.HTTPError as e:
+            error_body = e.read().decode('utf-8') if e.fp else 'no body'
+            st.write(f"[Cache] Turso HTTP {e.code}: {error_body[:200]}")
+            return None
         except Exception as e:
-            st.write(f"[Cache] Turso HTTP error: {e}")
+            st.write(f"[Cache] Turso error: {e}")
             return None
 
     def _init_turso(self):
