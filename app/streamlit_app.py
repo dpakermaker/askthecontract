@@ -12,6 +12,7 @@ from pathlib import Path
 from datetime import datetime
 import re
 import math
+import sqlite3
 
 # Add app directory to path
 sys.path.append(str(Path(__file__).parent))
@@ -32,59 +33,6 @@ st.set_page_config(
 # ============================================================
 
 QUICK_REFERENCE_CARDS = {
-    "How to File a Grievance": {
-        "icon": "📋",
-        "content": """## How to File a Non-Disciplinary Grievance
-*Per Section 19.C of the JCBA (Pages 220-222)*
-
-There are two types of Grievances: Disciplinary (Section 19.B) and Non-Disciplinary (Section 19.C). Below is the Non-Disciplinary process — the most common type for pay, scheduling, and contract interpretation disputes.
-
-**Step 1: Attempt Informal Resolution — DEADLINE: 30 Days**
-Per Section 19.C.1: You or a Union Representative must first attempt to resolve the dispute informally with the Chief Pilot, or designee, via phone conversation, personal meeting, or email within **30 Days** after you became aware, or reasonably should have become aware, of the event.
-
-**Step 2: File a Written Grievance — DEADLINE: 20 Business Days after Step 1**
-Per Section 19.C.2: If not resolved informally, you or the Union may file a written Grievance within **20 Business Days** after the informal discussion. Per Section 19.C.2, the written request must include:
-- A statement of the known facts
-- The specific sections of the Agreement allegedly violated
-- The dates out of which the Grievance arose
-- A request for relief (what remedy you are seeking)
-
-File this with the **Director of Operations, or designee** (Section 19.C.2).
-
-**Step 3: Grievance Meeting — Within 10 Business Days**
-Per Section 19.C.3: A Grievance Meeting between the Grievant, Union, and Director of Operations (or designee) shall be held within **10 Business Days** after receipt of your written request. The meeting is telephonic unless the parties mutually agree to meet in person.
-
-**Step 4: Exchange Documents — At Least 1 Business Day Before Meeting**
-Per Section 19.C.4-5: Both sides must provide copies of any documents, witness statements, and records of how the Company has interpreted or applied the provision in dispute. Documents must be exchanged **at least 1 Business Day** before the Grievance Meeting.
-
-**Step 5: Company Decision — Within 10 Business Days After Meeting**
-Per Section 19.C.7: The Director of Operations, or designee, shall issue a **written decision** (including any relief granted) to you and the Union within **10 Business Days** after the Grievance Meeting.
-
-**Step 6: Appeal to System Board — DEADLINE: 20 Business Days**
-Per Section 19.B.20 / Section 20: If you or the Union are not satisfied with the Company's decision, the Union may make a **written appeal** to the NAC Pilots System Board of Adjustment within **20 Business Days** after receipt of the decision.
-
----
-
-**⏰ CRITICAL DEADLINES — Missing any deadline forfeits your Grievance:**
-
-| Step | Action | Deadline |
-|------|--------|----------|
-| 1 | Informal resolution attempt | 30 Days from awareness |
-| 2 | File written Grievance | 20 Business Days after Step 1 |
-| 3 | Grievance Meeting held | 10 Business Days after filing |
-| 4 | Document exchange | 1 Business Day before meeting |
-| 5 | Company written decision | 10 Business Days after meeting |
-| 6 | Appeal to System Board | 20 Business Days after decision |
-
-Per Section 19.D.1: Time limits may be extended by **written agreement** between Company and Grievant or Union.
-
-Per Section 19.D.2: **Failure to file or advance any Grievance within the time periods prescribed shall result in the waiver and abandonment of the Grievance.**
-
-Per Section 19.D.3: All notifications, requests, and decisions shall be **in writing**.
-
-⚠️ **Contact your Union Representative (EXCO member) immediately when you identify a potential violation. Do not wait.**"""
-    },
-
     "What is a Pay Discrepancy?": {
         "icon": "💰",
         "content": """## What is a Pay Discrepancy?
@@ -331,6 +279,250 @@ All Regular, Composite, Reserve, and Domicile Flex Lines must have EITHER:
 ⚠️ *Refer to LOA #15 (Pages 320-349) which supersedes original Section 14.E provisions. Also see Section 13 (Hours of Service) for Duty Time and Rest requirements.*"""
     },
 
+    "Pay Calculation Guide": {
+        "icon": "🧮",
+        "content": """## Pay Calculation Guide — The 4-Way Comparison
+*Per Section 3.E of the JCBA (Pages 52-53)*
+
+Every trip or duty day, you are paid the **GREATER** of four calculations. The Company must pay whichever is highest.
+
+---
+
+**1. Block Time PCH**
+Your actual flight time (brake release to block in).
+- Example: 6.0 hours of flying = 6.0 PCH
+
+**2. Duty Rig (1:2 ratio)**
+One PCH for every two hours of total Duty Time, prorated minute-by-minute.
+- Formula: Total Duty Hours ÷ 2
+- Example: 12 hours duty = 6.0 PCH
+
+**3. Daily Pay Guarantee (DPG)**
+Minimum pay per workday: **3.82 PCH per day**
+- For multi-day trips, multiply by number of days
+- Example: 3-day trip = 3.82 × 3 = 11.46 PCH
+
+**4. Trip Rig (TAFD ÷ 4.9)**
+Time Away From Domicile divided by 4.9, prorated minute-by-minute.
+- Formula: Total TAFD Hours ÷ 4.9
+- Example: 40 hours TAFD = 8.16 PCH
+- Only applies to multi-day trips (not single duty periods)
+
+---
+
+**Example Calculation:**
+A 3-day trip with 12 hours block, 28 hours duty, 38 hours TAFD:
+| Method | Calculation | PCH |
+|--------|-------------|-----|
+| Block Time | 12.0 hours | 12.0 |
+| Duty Rig | 28 ÷ 2 | 14.0 |
+| DPG | 3.82 × 3 days | 11.46 |
+| Trip Rig | 38 ÷ 4.9 | 7.76 |
+
+**Winner: Duty Rig at 14.0 PCH** → 14.0 × your hourly rate = trip pay
+
+---
+
+**Premium Multipliers (applied AFTER the 4-way comparison):**
+| Situation | Premium | Section |
+|-----------|---------|---------|
+| Open Time pickup | 150% | 3.N |
+| Day Off duty (weather/mx/ATC) | 150% | 3.Q.1 |
+| Junior Assignment (1st in 3 months) | 200% | 3.R.1 |
+| Junior Assignment (2nd in 3 months) | 250% | 3.R.2 |
+| Check Airman Day Off admin | 175% | 3.S.5.b |
+
+**Current Hourly Rate = DOS Rate × 1.14869** (7 annual 2% increases since July 2018)
+
+⚠️ Always verify your pay stub matches the highest of the four calculations."""
+    },
+
+    "Extension Rules": {
+        "icon": "⏰",
+        "content": """## Extension Rules
+*Per Section 14.N of the JCBA (Pages 185-186)*
+
+An Extension is an involuntary assignment to additional duty after your originally scheduled Trip Pairing.
+
+---
+
+**Hard Limits:**
+- **1 extension per month maximum** (Section 14.N.6)
+- Extensions **cannot exceed duty time limits** (16hr basic / 18hr augmented / 20hr heavy crew per Section 13.F)
+- Extensions **cannot cause you to miss a Day Off** beyond 0200 LDT (Section 15.A.7)
+
+**Your Rights When Extended:**
+- You must be notified before your last flight segment departs (Section 14.K.1)
+- Extension must not violate your legality (rest, duty limits)
+- If you've already been extended once this month, you **cannot** be extended again
+
+**Pay for Extensions:**
+- **150% overtime premium** applies to all duty performed during the extension (Section 14.K.2.i / Section 3.Q)
+- Pay is calculated using the same 4-way comparison (Block, Duty Rig, DPG, Trip Rig) — whichever is greater
+- The overtime premium applies to the PCH earned
+
+**Mechanical Delay During Extension:**
+- If delayed beyond 3 hours after original Duty Off Time due to circumstances beyond Company control (weather, mx, ATC), you finish the trip (Section 14.K.1.h)
+- Company must provide hotel and transportation if needed
+
+**What to Track:**
+- ✅ Time of extension notification
+- ✅ Your original scheduled Duty Off time
+- ✅ Whether this is your 1st or 2nd extension this month
+- ✅ Total duty time (to verify limits aren't exceeded)
+- ✅ Whether duty extends into a scheduled Day Off
+
+⚠️ **If you've been extended more than once in a calendar month, contact your union representative immediately — this is a potential contract violation.**"""
+    },
+
+    "Junior Assignment Rules": {
+        "icon": "⚖️",
+        "content": """## Junior Assignment (JA) Rules
+*Per Section 14.O of the JCBA (Pages 188-190) and Section 3.R (Pages 61-62)*
+
+A Junior Assignment is when the Company involuntarily assigns a pilot to duty on a Day Off.
+
+---
+
+**Hard Limits:**
+- **Maximum 2 JAs in any rolling 3-month period** (Section 14.O.12)
+- Cannot be JA'd while on **Vacation** (Section 14.O)
+- Cannot be JA'd more than **48 hours** before departure (Section 14.O)
+- Must follow **inverse seniority order** — most junior available pilot first (Section 14.O.4)
+
+**Who Can Be JA'd:**
+
+| Reserve Type | JA Eligible? | Notes |
+|-------------|-------------|-------|
+| R-1 | ❌ No | Section 14.O.14 |
+| R-2 | ⚠️ International only | Section 14.O.14 |
+| R-3 | ❌ No | Section 14.O.14 |
+| R-4 | ❌ No | Reassigned, not eligible |
+| Line holders | ✅ Yes | On Day Off, inverse seniority |
+
+**JA Pay Premiums:**
+
+| Situation | Premium | Section |
+|-----------|---------|---------|
+| 1st JA in rolling 3 months | **200%** of hourly rate | 3.R.1 |
+| 2nd JA in rolling 3 months | **250%** of hourly rate | 3.R.2 |
+
+Premium applies to ALL PCH earned during the JA, paid **in addition** to monthly pay (Section 3.R.3).
+
+**Example:** Year 8 Captain, 10-hour duty day, 1st JA in 3 months:
+- Duty Rig: 10 ÷ 2 = 5.0 PCH (highest of 4-way comparison)
+- JA Premium: 5.0 × 191.22 × 200% = 1,912.20
+
+**What to Track:**
+- ✅ Date/time of JA notification
+- ✅ Was inverse seniority followed? (Were more junior pilots available?)
+- ✅ Is this your 1st or 2nd JA in the rolling 3-month period?
+- ✅ Were you on a scheduled Day Off?
+- ✅ Total duty time and block time for pay calculation
+
+⚠️ **If you've been JA'd 3 times in 3 months, or JA'd on Vacation, contact your union representative immediately.**"""
+    },
+
+    "Open Time & Trip Pickup": {
+        "icon": "✈️",
+        "content": """## Open Time & Trip Pickup
+*Per Section 14.M-N of the JCBA (Pages 183-186)*
+
+Open Time consists of Trip Pairings and Reserve Assignments remaining after Final Bid Awards, plus any new trips that become available during the month.
+
+---
+
+**How to Pick Up Open Time:**
+1. Open Time is posted on the Company's system
+2. Pilots may request to pick up available trips during SAP (Schedule Adjustment Period) or during the month
+3. Awards are based on **seniority** — most senior requesting pilot gets the trip
+
+**Open Time Premium Pay:**
+- **150% of applicable hourly rate** for all PCH earned (Section 3.N)
+- This is a significant pay boost — always check what's available
+- Premium applies to the GREATER of the 4-way pay comparison (Block, Duty Rig, DPG, Trip Rig)
+
+**Example:** Year 8 Captain picks up a trip with 8.0 PCH:
+- 8.0 × 191.22 × 150% = 2,294.64
+
+**SAP (Schedule Adjustment Period):**
+- Occurs after Initial Line Awards are published (Section 14.H)
+- Pilots can pick up trips, trade trips, or drop trips during SAP
+- Seniority-based awards
+
+**Trip Trading:**
+- Pilots may trade trips with other pilots (Section 14.L)
+- Both pilots must be legal for the other's trip
+- Trades must not create conflicts with existing schedule
+
+**Key Restrictions:**
+- Cannot pick up Open Time that conflicts with scheduled assignments
+- Cannot exceed duty time limits or violate rest requirements
+- Must maintain minimum Days Off requirements
+- Company may restrict pickups to maintain operational coverage
+
+**What to Track:**
+- ✅ Open Time posting times
+- ✅ Your pickup requests and timestamps
+- ✅ Whether seniority order was followed in awards
+- ✅ PCH earned vs. what shows on pay stub (verify 150% applied)
+
+⚠️ **Open Time at 150% is one of the best ways to increase your monthly pay. Check the board regularly.**"""
+    },
+
+    "How to File a Grievance": {
+        "icon": "📋",
+        "content": """## How to File a Non-Disciplinary Grievance
+*Per Section 19.C of the JCBA (Pages 220-222)*
+
+There are two types of Grievances: Disciplinary (Section 19.B) and Non-Disciplinary (Section 19.C). Below is the Non-Disciplinary process — the most common type for pay, scheduling, and contract interpretation disputes.
+
+**Step 1: Attempt Informal Resolution — DEADLINE: 30 Days**
+Per Section 19.C.1: You or a Union Representative must first attempt to resolve the dispute informally with the Chief Pilot, or designee, via phone conversation, personal meeting, or email within **30 Days** after you became aware, or reasonably should have become aware, of the event.
+
+**Step 2: File a Written Grievance — DEADLINE: 20 Business Days after Step 1**
+Per Section 19.C.2: If not resolved informally, you or the Union may file a written Grievance within **20 Business Days** after the informal discussion. Per Section 19.C.2, the written request must include:
+- A statement of the known facts
+- The specific sections of the Agreement allegedly violated
+- The dates out of which the Grievance arose
+- A request for relief (what remedy you are seeking)
+
+File this with the **Director of Operations, or designee** (Section 19.C.2).
+
+**Step 3: Grievance Meeting — Within 10 Business Days**
+Per Section 19.C.3: A Grievance Meeting between the Grievant, Union, and Director of Operations (or designee) shall be held within **10 Business Days** after receipt of your written request. The meeting is telephonic unless the parties mutually agree to meet in person.
+
+**Step 4: Exchange Documents — At Least 1 Business Day Before Meeting**
+Per Section 19.C.4-5: Both sides must provide copies of any documents, witness statements, and records of how the Company has interpreted or applied the provision in dispute. Documents must be exchanged **at least 1 Business Day** before the Grievance Meeting.
+
+**Step 5: Company Decision — Within 10 Business Days After Meeting**
+Per Section 19.C.7: The Director of Operations, or designee, shall issue a **written decision** (including any relief granted) to you and the Union within **10 Business Days** after the Grievance Meeting.
+
+**Step 6: Appeal to System Board — DEADLINE: 20 Business Days**
+Per Section 19.B.20 / Section 20: If you or the Union are not satisfied with the Company's decision, the Union may make a **written appeal** to the NAC Pilots System Board of Adjustment within **20 Business Days** after receipt of the decision.
+
+---
+
+**⏰ CRITICAL DEADLINES — Missing any deadline forfeits your Grievance:**
+
+| Step | Action | Deadline |
+|------|--------|----------|
+| 1 | Informal resolution attempt | 30 Days from awareness |
+| 2 | File written Grievance | 20 Business Days after Step 1 |
+| 3 | Grievance Meeting held | 10 Business Days after filing |
+| 4 | Document exchange | 1 Business Day before meeting |
+| 5 | Company written decision | 10 Business Days after meeting |
+| 6 | Appeal to System Board | 20 Business Days after decision |
+
+Per Section 19.D.1: Time limits may be extended by **written agreement** between Company and Grievant or Union.
+
+Per Section 19.D.2: **Failure to file or advance any Grievance within the time periods prescribed shall result in the waiver and abandonment of the Grievance.**
+
+Per Section 19.D.3: All notifications, requests, and decisions shall be **in writing**.
+
+⚠️ **Contact your Union Representative (EXCO member) immediately when you identify a potential violation. Do not wait.**"""
+    },
+
     "What Evidence to Save": {
         "icon": "📁",
         "content": """## What Evidence to Save
@@ -366,6 +558,13 @@ If you believe the contract has been violated, start saving evidence immediately
 - ✅ Initial Call times and your response times
 - ✅ FIFO list at time of assignment
 - ✅ Whether proper FIFO order was followed
+
+**For Grievances:**
+- ✅ All emails between you, the Company, and your Union Rep related to the grievance
+- ✅ Written grievance filing with date submitted
+- ✅ Company's written response/decision
+- ✅ Dates of each step (informal discussion, written filing, meeting, decision)
+- ✅ Names of managers and representatives involved
 
 **How to Save:**
 - Screenshot everything on your phone immediately
@@ -2352,6 +2551,45 @@ def ask_question(question, chunks, embeddings, openai_client, anthropic_client, 
     return answer, status, response_time
 
 # ============================================================
+# ANALYTICS DASHBOARD
+# ============================================================
+def _load_top_questions():
+    """Load top 5 most asked questions from SQLite logger database."""
+    try:
+        logger = init_logger()
+        conn = sqlite3.connect(logger.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT question_text, COUNT(*) as cnt 
+            FROM questions_log 
+            GROUP BY question_text 
+            ORDER BY cnt DESC 
+            LIMIT 5
+        """)
+        top = cursor.fetchall()
+        conn.close()
+        return top
+    except:
+        return []
+
+def render_analytics_dashboard():
+    """Render simple public analytics — just top questions."""
+    st.markdown("## 🔥 Most Asked Questions")
+    st.caption("See what other pilots are asking about")
+    
+    top = _load_top_questions()
+    
+    if top:
+        for i, (q_text, count) in enumerate(top, 1):
+            label = f"**{i}.** {q_text}"
+            if count > 1:
+                label += f"  ·  *asked {count} times*"
+            st.markdown(label)
+    else:
+        st.caption("No questions logged yet. Be the first to ask!")
+
+# ============================================================
 # SESSION STATE
 # ============================================================
 if 'authenticated' not in st.session_state:
@@ -2362,6 +2600,8 @@ if 'selected_contract' not in st.session_state:
     st.session_state.selected_contract = None
 if 'show_reference' not in st.session_state:
     st.session_state.show_reference = None
+if 'show_analytics' not in st.session_state:
+    st.session_state.show_analytics = False
 if 'ratings' not in st.session_state:
     st.session_state.ratings = {}
 
@@ -2434,8 +2674,13 @@ else:
         for card_name, card_data in QUICK_REFERENCE_CARDS.items():
             if st.button(f"{card_data['icon']} {card_name}", key=f"ref_{card_name}", use_container_width=True):
                 st.session_state.show_reference = card_name
+                st.session_state.show_analytics = False
 
         st.write("---")
+        if st.button("🔥 Most Asked Questions", use_container_width=True):
+            st.session_state.show_analytics = not st.session_state.show_analytics
+            st.session_state.show_reference = None
+            st.rerun()
         if st.button("🗑️ Clear Conversation", use_container_width=True):
             st.session_state.conversation = []
             st.session_state.show_reference = None
@@ -2453,6 +2698,14 @@ else:
         st.markdown(card['content'])
         if st.button("✖ Close Reference Card"):
             st.session_state.show_reference = None
+            st.rerun()
+        st.write("---")
+
+    # Show Analytics Dashboard if selected
+    if st.session_state.show_analytics:
+        render_analytics_dashboard()
+        if st.button("✖ Close"):
+            st.session_state.show_analytics = False
             st.rerun()
         st.write("---")
 
