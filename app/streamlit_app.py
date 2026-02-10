@@ -1015,10 +1015,12 @@ def _build_pay_reference(question):
     block_hours = None
     tafd_hours = None
 
-    # "12 hour duty" or "duty of 12 hours" or "12-hour duty day"
+    # "12 hour duty" or "duty of 12 hours" or "12-hour duty day" or "duty for 12 hours"
     duty_match = re.search(r'(\d+(?:\.\d+)?)\s*[\s-]*hours?\s*(?:of\s+)?(?:duty|on duty|duty day|duty period)', q)
     if not duty_match:
-        duty_match = re.search(r'duty\s*(?:of|period|day|time)?\s*(?:of|is|was|:)?\s*(\d+(?:\.\d+)?)\s*hours?', q)
+        duty_match = re.search(r'duty\s*(?:of|for|period|day|time)?\s*(?:of|is|was|for|:)?\s*(\d+(?:\.\d+)?)\s*hours?', q)
+    if not duty_match:
+        duty_match = re.search(r'duty\s*(?:went|reached|hit|got|exceeded|was)\s*(?:to|up to)?\s*(\d+(?:\.\d+)?)\s*hours?', q)
     if duty_match:
         duty_hours = float(duty_match.group(1))
 
@@ -1127,7 +1129,81 @@ def _build_pay_reference(question):
 
     return "\n".join(lines)
 
+# ============================================================
+# GRIEVANCE PATTERN DETECTOR
+# Scans question for potential contract violation indicators
+# and injects alerts so Sonnet addresses them proactively.
+# ============================================================
+def _detect_grievance_patterns(question):
+    """Detect potential contract violation patterns in a scenario question.
+    Returns a text block to inject into the API call, or empty string."""
+    q = question.lower()
+    alerts = []
 
+    # --- DUTY TIME VIOLATIONS ---
+    duty_match = re.search(r'(\d+(?:\.\d+)?)\s*[\s-]*hours?\s*(?:of\s+)?(?:duty|on duty|duty day|duty period)', q)
+    if not duty_match:
+        duty_match = re.search(r'duty\s*(?:of|for|period|day|time)?\s*(?:of|is|was|for|:)?\s*(\d+(?:\.\d+)?)\s*hours?', q)
+    if not duty_match:
+        # "duty went to 15.5 hours" / "duty reached 17 hours" / "duty hit 16 hours"
+        duty_match = re.search(r'duty\s*(?:went|reached|hit|got|exceeded|was)\s*(?:to|up to)?\s*(\d+(?:\.\d+)?)\s*hours?', q)
+    if duty_match:
+        duty_hrs = float(duty_match.group(1))
+        if duty_hrs > 16:
+            alerts.append(f"⚠️ DUTY TIME ALERT: {duty_hrs} hours exceeds the 16-hour maximum for a basic 2-pilot crew (Section 13.F.1). Verify crew complement — 18hr max for augmented (3-pilot), 20hr max for heavy (4-pilot). If exceeded, per Section 14.N, the Company must remove the pilot from the trip and place into rest.")
+        elif duty_hrs > 14:
+            alerts.append(f"⚠️ REST REQUIREMENT ALERT: {duty_hrs} hours of duty triggers the 12-hour minimum rest requirement (Section 13.G.1 — duty over 14 hours requires 12 hours rest, not the standard 10 hours).")
+
+    # --- REST PERIOD VIOLATIONS ---
+    rest_match = re.search(r'(\d+(?:\.\d+)?)\s*hours?\s*(?:of\s+)?(?:rest|off|between)', q)
+    if rest_match:
+        rest_hrs = float(rest_match.group(1))
+        if rest_hrs < 10:
+            alerts.append(f"⚠️ REST VIOLATION ALERT: {rest_hrs} hours of rest is below the 10-hour minimum required after duty of 14 hours or less (Section 13.G.1). This is a potential grievance.")
+        elif rest_hrs < 12:
+            alerts.append(f"⚠️ REST ALERT: {rest_hrs} hours rest — verify prior duty period length. If prior duty exceeded 14 hours, minimum rest is 12 hours, not 10 (Section 13.G.1).")
+
+    # --- JUNIOR ASSIGNMENT ISSUES ---
+    if 'junior assign' in q or 'ja ' in q or ' ja' in q:
+        alerts.append("⚠️ JA CHECKLIST: Verify (1) inverse seniority order was followed (Section 14.O.1), (2) whether this is 1st or 2nd JA in rolling 3-month period for premium rate (Section 3.R), (3) one-extension-per-month limit if extended (Section 14.N.6).")
+        if 'day off' in q:
+            alerts.append("⚠️ DAY-OFF JA: Per Section 14.O, JA on a Day Off requires 200% premium (1st in 3mo) or 250% (2nd in 3mo). Verify the pilot was not senior to other available pilots.")
+
+    # --- EXTENSION ISSUES ---
+    if 'extend' in q or 'extension' in q:
+        alerts.append("⚠️ EXTENSION CHECKLIST: Per Section 14.N — (1) only ONE involuntary extension per month is permitted, (2) extension cannot violate duty time limits (Section 13.F), (3) extension cannot cause a pilot to miss a scheduled Day Off beyond 0200 LDT (Section 15.A.7).")
+
+    # --- DAY OFF ENCROACHMENT ---
+    if 'day off' in q and ('work' in q or 'called' in q or 'schedul' in q or 'assign' in q or 'duty' in q):
+        if 'ja' not in q and 'junior' not in q:  # JA already handled above
+            alerts.append("⚠️ DAY-OFF WORK: Determine if this was a Junior Assignment (200%/250% per Section 3.R) or voluntary Open Time pickup (150% per Section 3.P). Assignments may be scheduled up to 0200 LDT into a Day Off (Section 15.A.7) — duty past 0200 into a Day Off is a potential violation.")
+
+    # --- MINIMUM DAYS OFF ---
+    if 'days off' in q and ('month' in q or 'line' in q or 'schedule' in q):
+        alerts.append("⚠️ DAYS OFF MINIMUM: Per Section 14.E.5.d, minimum is 13 Days Off for a 30-day month and 14 Days Off for a 31-day month. Verify the published line meets this requirement.")
+
+    # --- POSITIVE CONTACT ---
+    if 'schedule change' in q or 'reassign' in q or 'no call' in q or 'no contact' in q or 'never called' in q or 'text message' in q or 'text only' in q or 'email only' in q or 'voicemail' in q or ('no phone' in q and 'call' in q) or ('text' in q and 'no call' in q) or ('changed' in q and ('text' in q or 'email' in q)):
+        alerts.append("⚠️ POSITIVE CONTACT REQUIRED: Per MOU #2 (Page 381), schedule changes require Positive Contact via the pilot's authorized phone number. Email, text, or voicemail alone is NOT sufficient — the pilot must acknowledge the change verbally. Failure to make Positive Contact means the change is not effective.")
+
+    # --- REST INTERRUPTION ---
+    if 'rest' in q and ('interrupt' in q or 'call' in q or 'phone' in q or 'woke' in q or 'disturb' in q):
+        alerts.append("⚠️ REST INTERRUPTION: Per Section 13.H.7, if a pilot's rest is interrupted (e.g., hotel security, repeated phone calls), the required rest period begins anew. Only emergency/security notifications are exempt from this rule.")
+
+    # --- REASSIGNMENT ISSUES ---
+    if 'reassign' in q and ('reserve' in q or 'r-1' in q or 'r-2' in q or 'r-3' in q or 'r-4' in q or 'r1' in q or 'r2' in q):
+        alerts.append("⚠️ RESERVE REASSIGNMENT: Per MOU #4 (Page 383), Crew Scheduling cannot reassign a pilot performing a Trip Pairing to a Reserve Assignment. Reserve type changes require 12-hour notice (MOU #4 provision 8). If more than 2 pilots may be reassigned, inverse seniority applies (MOU #4 provision 13).")
+
+    if not alerts:
+        return ""
+
+    header = "GRIEVANCE PATTERN ALERTS (address each applicable alert in your response):"
+    return header + "\n" + "\n".join(alerts)
+
+
+# ============================================================
+# API CALL
+# ============================================================
 def _ask_question_api(question, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name, conversation_history=None):
     start_time = time.time()
 
@@ -1385,6 +1461,11 @@ QUESTION: {question}
     pay_ref = _build_pay_reference(question)
     if pay_ref:
         user_content += f"\n{pay_ref}\n"
+
+    # Inject grievance pattern alerts if applicable
+    grievance_ref = _detect_grievance_patterns(question)
+    if grievance_ref:
+        user_content += f"\n{grievance_ref}\n"
 
     user_content += "\nAnswer:"
 
