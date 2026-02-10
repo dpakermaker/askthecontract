@@ -677,20 +677,11 @@ def get_answer_modifier(category_label):
 # Logging only, no AI processing
 # ============================================================
 
-def log_rating(question_text, rating, comment=""):
-    """Log a rating to file. No AI."""
+def log_rating(question_text, rating, contract_id, comment=""):
+    """Log a rating via ContractLogger (Turso-backed)."""
     try:
-        log_dir = Path(__file__).parent.parent / "logs"
-        log_dir.mkdir(exist_ok=True)
-        rating_file = log_dir / "answer_ratings.jsonl"
-        entry = {
-            "timestamp": datetime.now().isoformat(),
-            "question": question_text,
-            "rating": rating,
-            "comment": comment
-        }
-        with open(rating_file, "a") as f:
-            f.write(json.dumps(entry) + "\n")
+        logger = init_logger()
+        logger.log_rating(question_text, rating, contract_id, comment)
         return True
     except:
         return False
@@ -2556,7 +2547,8 @@ def _load_top_questions():
     """Load top 5 most asked questions via logger (Turso or local fallback)."""
     try:
         logger = init_logger()
-        return logger.get_top_questions(5)
+        contract_id = st.session_state.get('selected_contract')
+        return logger.get_top_questions(5, contract_id=contract_id)
     except:
         return []
 
@@ -2727,7 +2719,8 @@ else:
                 answer_text=answer,
                 status=status,
                 contract_id=st.session_state.selected_contract,
-                response_time=response_time
+                response_time=response_time,
+                category=category
             )
 
             st.session_state.conversation.append({
@@ -2766,11 +2759,11 @@ else:
             rating_key = f"rating_{q_num}"
             with col1:
                 if st.button("👍", key=f"up_{q_num}"):
-                    log_rating(qa['question'], "up")
+                    log_rating(qa['question'], "up", st.session_state.selected_contract)
                     st.session_state.ratings[rating_key] = "up"
             with col2:
                 if st.button("👎", key=f"down_{q_num}"):
-                    log_rating(qa['question'], "down")
+                    log_rating(qa['question'], "down", st.session_state.selected_contract)
                     st.session_state.ratings[rating_key] = "down"
             with col3:
                 if rating_key in st.session_state.ratings:
