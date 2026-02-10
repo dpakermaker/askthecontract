@@ -12,7 +12,6 @@ from pathlib import Path
 from datetime import datetime
 import re
 import math
-import sqlite3
 
 # Add app directory to path
 sys.path.append(str(Path(__file__).parent))
@@ -2554,22 +2553,10 @@ def ask_question(question, chunks, embeddings, openai_client, anthropic_client, 
 # ANALYTICS DASHBOARD
 # ============================================================
 def _load_top_questions():
-    """Load top 5 most asked questions from SQLite logger database."""
+    """Load top 5 most asked questions via logger (Turso or local fallback)."""
     try:
         logger = init_logger()
-        conn = sqlite3.connect(logger.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT question_text, COUNT(*) as cnt 
-            FROM questions_log 
-            GROUP BY question_text 
-            ORDER BY cnt DESC 
-            LIMIT 5
-        """)
-        top = cursor.fetchall()
-        conn.close()
-        return top
+        return logger.get_top_questions(5)
     except:
         return []
 
