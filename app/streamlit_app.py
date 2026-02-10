@@ -628,7 +628,7 @@ class SemanticCache:
                     {"type": "text", "value": question},
                     {"type": "text", "value": answer},
                     {"type": "text", "value": status or ""},
-                    {"type": "float", "value": str(response_time)},
+                    {"type": "float", "value": response_time},
                     {"type": "text", "value": emb_b64}
                 ]
             }
