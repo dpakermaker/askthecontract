@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 import re
+import math
 
 # Add app directory to path
 sys.path.append(str(Path(__file__).parent))
@@ -761,6 +762,84 @@ def load_contract(contract_id):
 def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
+# ============================================================
+# BM25 KEYWORD SEARCH
+# Catches exact contract terms that embeddings might miss.
+# No external packages — pure Python implementation.
+# ============================================================
+# Contract-specific stopwords — common English words plus filler
+_BM25_STOPWORDS = frozenset([
+    'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+    'should', 'may', 'might', 'shall', 'can', 'to', 'of', 'in', 'for',
+    'on', 'with', 'at', 'by', 'from', 'as', 'into', 'about', 'between',
+    'through', 'after', 'before', 'during', 'and', 'or', 'but', 'not',
+    'no', 'nor', 'if', 'then', 'than', 'that', 'this', 'these', 'those',
+    'it', 'its', 'he', 'his', 'him', 'i', 'my', 'me', 'we', 'our',
+    'you', 'your', 'they', 'their', 'what', 'which', 'who', 'when',
+    'where', 'how', 'all', 'each', 'any', 'both', 'such', 'other',
+])
+
+def _bm25_tokenize(text):
+    """Tokenize text for BM25. Preserves section numbers and hyphenated terms."""
+    # Lowercase, split on whitespace and punctuation but keep hyphens and dots in terms
+    tokens = re.findall(r'[a-z0-9](?:[a-z0-9\-\.]*[a-z0-9])?', text.lower())
+    return [t for t in tokens if t not in _BM25_STOPWORDS and len(t) > 1]
+
+@st.cache_data(show_spinner=False)
+def _build_bm25_index(_chunk_texts):
+    """Pre-compute BM25 index from chunk texts. Cached so it only runs once."""
+    # _chunk_texts is a tuple of strings (hashable for st.cache_data)
+    doc_tokens = [_bm25_tokenize(text) for text in _chunk_texts]
+    doc_count = len(doc_tokens)
+    avg_dl = sum(len(d) for d in doc_tokens) / doc_count if doc_count > 0 else 1
+
+    # Document frequency: how many docs contain each term
+    df = {}
+    for tokens in doc_tokens:
+        for term in set(tokens):
+            df[term] = df.get(term, 0) + 1
+
+    # IDF: log((N - df + 0.5) / (df + 0.5) + 1)
+    idf = {}
+    for term, freq in df.items():
+        idf[term] = math.log((doc_count - freq + 0.5) / (freq + 0.5) + 1)
+
+    return doc_tokens, idf, avg_dl
+
+def _bm25_search(query, chunks, top_n=15, k1=1.5, b=0.75):
+    """Score all chunks against query using BM25. Returns top_n (score, chunk) pairs."""
+    # Build index (cached after first call)
+    chunk_texts = tuple(c['text'] for c in chunks)
+    doc_tokens, idf, avg_dl = _build_bm25_index(chunk_texts)
+
+    query_tokens = _bm25_tokenize(query)
+    if not query_tokens:
+        return []
+
+    scores = []
+    for i, tokens in enumerate(doc_tokens):
+        dl = len(tokens)
+        score = 0.0
+        # Term frequency map for this doc
+        tf_map = {}
+        for t in tokens:
+            tf_map[t] = tf_map.get(t, 0) + 1
+
+        for qt in query_tokens:
+            if qt in tf_map:
+                tf = tf_map[qt]
+                term_idf = idf.get(qt, 0)
+                numerator = tf * (k1 + 1)
+                denominator = tf + k1 * (1 - b + b * dl / avg_dl)
+                score += term_idf * numerator / denominator
+
+        if score > 0:
+            scores.append((score, chunks[i]))
+
+    scores.sort(reverse=True, key=lambda x: x[0])
+    return scores[:top_n]
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_embedding_cached(question_text, _openai_client):
     response = _openai_client.embeddings.create(
@@ -1118,6 +1197,42 @@ PROVISION_CHAINS = {
     # NRFO → Section 3.L
     'nrfo': [58],
     'non-routine': [58],
+    # Direct MOU references by number
+    'mou #1': [379],
+    'mou #2': [381],
+    'mou #3': [382],
+    'mou #4': [383, 384, 385],
+    'mou #5': [386, 387],
+    'mou #6': [388],
+    'mou #7': [390],
+    'mou #8': [391],
+    'mou #9': [392],
+    'mou 1': [379],
+    'mou 2': [381],
+    'mou 3': [382],
+    'mou 4': [383, 384, 385],
+    'mou 5': [386, 387],
+    'mou 6': [388],
+    'mou 7': [390],
+    'mou 8': [391],
+    'mou 9': [392],
+    # Direct LOA references by number
+    'loa #3': [281, 282, 283, 284, 285],
+    'loa #4': [272, 273, 274, 275, 276, 277],
+    'loa #7': [293, 294, 295],
+    'loa #9': [301, 302],
+    'loa #10': [304, 305, 306],
+    'loa #11': [307, 308, 309, 310, 311],
+    'loa #15': [326, 328, 338, 339, 342, 344],
+    'loa #16': [353, 354, 355, 356, 357, 358],
+    'loa 3': [281, 282, 283, 284, 285],
+    'loa 4': [272, 273, 274, 275, 276, 277],
+    'loa 7': [293, 294, 295],
+    'loa 9': [301, 302],
+    'loa 10': [304, 305, 306],
+    'loa 11': [307, 308, 309, 310, 311],
+    'loa 15': [326, 328, 338, 339, 342, 344],
+    'loa 16': [353, 354, 355, 356, 357, 358],
 }
 
 def get_pack_chunks(pack_key, all_chunks):
@@ -1209,7 +1324,12 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
     similarities.sort(reverse=True, key=lambda x: x[0])
     embedding_chunks = [chunk for score, chunk in similarities[:embedding_top_n]]
 
-    # Merge: forced first, then pack, then embedding — deduplicated
+    # BM25 keyword search — catches exact terms embeddings miss
+    bm25_top_n = min(10, embedding_top_n)
+    bm25_results = _bm25_search(question, chunks, top_n=bm25_top_n)
+    bm25_chunks = [chunk for score, chunk in bm25_results]
+
+    # Merge: forced first, then pack, then BM25, then embedding — deduplicated
     seen_ids = set()
     merged = []
 
@@ -1220,6 +1340,14 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
             merged.append(chunk)
 
     for chunk in pack_chunks:
+        chunk_id = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
+        if chunk_id not in seen_ids:
+            seen_ids.add(chunk_id)
+            merged.append(chunk)
+            if len(merged) >= max_total:
+                break
+
+    for chunk in bm25_chunks:
         chunk_id = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
         if chunk_id not in seen_ids:
             seen_ids.add(chunk_id)
