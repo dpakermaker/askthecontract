@@ -2162,10 +2162,6 @@ else:
             else:
                 st.info(qa['answer'])
 
-            # FEATURE 3: "What Would Change This Answer?"
-            with st.expander("⚙️ What would change this answer?"):
-                st.markdown(get_answer_modifier(category))
-
             # Bottom row
             col1, col2, col3, col4 = st.columns([1, 1, 3, 1])
 
