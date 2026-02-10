@@ -1737,7 +1737,7 @@ QUESTION: {question}
             {
                 "type": "text",
                 "text": system_prompt,
-                "cache_control": {"type": "ephemeral"}
+                "cache_control": {"type": "ephemeral", "ttl": "1h"}
             }
         ],
         messages=messages
@@ -1822,6 +1822,190 @@ DEFINITIONS_LOOKUP = {
     'vacancy': 'An open Position (Domicile/Aircraft Type/Status) to be filled per Section 18.',
 }
 
+# Fixed-value contract rules for instant lookup (no API call)
+TIER1_RULES = {
+    'grievance_deadline': {
+        'keywords': ['grievance deadline', 'grievance time limit', 'how long to file a grievance',
+                     'how long do i have to file', 'how long to grieve', 'grievance filing deadline',
+                     'time to file grievance', 'when to file grievance', 'deadline to grieve',
+                     'days to file grievance', 'days to grieve'],
+        'answer': """📄 CONTRACT LANGUAGE: "A Pilot or Union Representative must first attempt to resolve the dispute informally with the Chief Pilot, or designee, via phone conversation, personal meeting, or e-mail within thirty (30) Days after the Pilot became aware, or reasonably should have become aware, of the event giving rise to the Grievance."
+📍 Section 19.C.1, Page 220
+
+"If the dispute is not resolved during the informal discussion, the Pilot or Union may file a written Grievance within twenty (20) Business Days after the informal discussion."
+📍 Section 19.C.2, Page 220
+
+"Failure to file or advance any Grievance within the time periods prescribed in this Section shall result in the waiver and abandonment of the Grievance."
+📍 Section 19.D.2, Page 222
+
+📝 EXPLANATION: The contract establishes a two-step filing process:
+- Step 1: Attempt informal resolution within 30 Days of becoming aware of the event (Section 19.C.1)
+- Step 2: If unresolved, file a written Grievance within 20 Business Days after the informal discussion (Section 19.C.2)
+- Missing either deadline results in waiver and abandonment of the Grievance (Section 19.D.2)
+
+Full timeline: 30 Days (informal) → 20 Business Days (written filing) → 10 Business Days (meeting) → 10 Business Days (Company decision) → 20 Business Days (appeal to System Board)
+
+🔵 STATUS: CLEAR - The contract explicitly states these deadlines in Sections 19.C and 19.D.
+
+
+⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.""",
+    },
+
+    'minimum_days_off': {
+        'keywords': ['minimum days off', 'how many days off', 'days off per month',
+                     'min days off', 'days off minimum', 'monthly days off',
+                     'how many days off per month', 'days off in a month'],
+        'answer': """📄 CONTRACT LANGUAGE: "The minimum scheduled Days Off in all constructed Initial Lines shall be thirteen (13) in a thirty (30) Day Month and fourteen (14) in a thirty-one (31) Day Month."
+📍 Section 14.E.2.d (LOA #15), Page 328
+
+"All Regular, Composite, Reserve, and Domicile Flex Lines shall have either two (2) separate periods of at least three (3) consecutive Days Off, or one single block of at least five (5) consecutive Days Off."
+📍 Section 14.E.2.b (LOA #15), Page 328
+
+📝 EXPLANATION: Per the contract, the minimum Days Off per month are:
+- 30-day month: 13 Days Off minimum
+- 31-day month: 14 Days Off minimum
+
+These minimums apply to all line types (Regular, Composite, Reserve, Domicile Flex). Additionally, Days Off must be structured as either two blocks of 3+ consecutive Days Off, or one block of 5+ consecutive Days Off.
+
+Exception: TDY Lines have reduced minimums — 12 Days Off (30-day month) or 13 Days Off (31-day month) per Section 14.E.3.d.
+
+🔵 STATUS: CLEAR - The contract explicitly states minimum Days Off in Section 14.E.2.d (LOA #15).
+
+
+⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.""",
+    },
+
+    'dpg_value': {
+        'keywords': ['what is the dpg', 'what is dpg', 'dpg value', 'dpg amount',
+                     'how much is dpg', 'daily pay guarantee amount', 'daily pay guarantee value',
+                     'what is the daily pay guarantee', 'dpg pch', 'dpg hours'],
+        'answer': """📄 CONTRACT LANGUAGE: "Daily Pay Guarantee (DPG): Three and eighty-two hundredths hours (3.82) PCH."
+📍 Section 2 (Definitions), Page 21
+
+"A Pilot who is scheduled for Reserve or performs an Assignment while on Reserve shall be paid the greater of: (a) the applicable Daily Pay Guarantee; or (b) the PCH earned from the assigned Trip Pairing."
+📍 Section 3.F.1.b, Page 53
+
+📝 EXPLANATION: The Daily Pay Guarantee (DPG) is 3.82 PCH per day of scheduled Duty or Company-Directed Assignment. This is the minimum a pilot receives for any workday, regardless of actual block time. The pilot always receives the GREATER of DPG, block time, Duty Rig, or Trip Rig.
+
+To calculate the dollar value: 3.82 PCH x your current hourly rate. For example, a Year 12 B737 Captain (217.33/hour): 3.82 x 217.33 = 830.20 per day minimum.
+
+🔵 STATUS: CLEAR - The contract explicitly defines DPG as 3.82 PCH in Section 2.
+
+
+⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.""",
+    },
+
+    'rest_minimums': {
+        'keywords': ['minimum rest', 'rest requirement', 'how much rest', 'rest between',
+                     'rest minimum', 'min rest', 'hours of rest', 'rest after duty',
+                     'rest period requirement', 'required rest'],
+        'answer': """📄 CONTRACT LANGUAGE: "A Pilot shall be given a minimum Rest Period of ten (10) consecutive hours after completing a Duty Period of fourteen (14) hours or less."
+📍 Section 13.G.1, Page 155
+
+"A Pilot shall be given a minimum Rest Period of twelve (12) consecutive hours after completing a Duty Period of more than fourteen (14) hours."
+📍 Section 13.G.1, Page 155
+
+"If a Pilot's Rest is interrupted, the required Rest Period begins anew."
+📍 Section 13.H.7, Page 156
+
+📝 EXPLANATION: Per the contract, minimum rest requirements are:
+- After duty of 14 hours or less: 10 hours minimum rest
+- After duty of more than 14 hours: 12 hours minimum rest
+
+Important: If rest is interrupted (phone calls, hotel disturbances, etc.), the full rest period starts over from the beginning per Section 13.H.7. Only emergency or security notifications are exempt.
+
+Note: A Rest Period is NOT the same as a Day Off. A Day Off is a full calendar day (00:00-23:59) free from all Duty at Domicile.
+
+🔵 STATUS: CLEAR - The contract explicitly states rest minimums in Section 13.G.1.
+
+
+⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.""",
+    },
+
+    'duty_time_limits': {
+        'keywords': ['duty time limit', 'maximum duty', 'max duty', 'duty limit',
+                     'how long can i be on duty', 'duty hour limit', 'max duty hours',
+                     'maximum duty time', 'duty time max', 'how many hours of duty',
+                     'duty hours limit', 'longest duty day'],
+        'answer': """📄 CONTRACT LANGUAGE: "No Pilot shall be scheduled for or required to exceed the following maximum Duty Time limitations..."
+📍 Section 13.F.1, Page 154
+
+📝 EXPLANATION: Per the contract, maximum duty time depends on crew complement:
+- Basic crew (2 pilots): 16 hours maximum
+- Augmented crew (3 pilots): 18 hours maximum
+- Heavy crew (4 pilots): 20 hours maximum
+
+Per Section 14.N, if duty is projected to exceed these limits, the Company must remove the pilot from the trip and place them into rest. A pilot may not be extended beyond these limits.
+
+Per Section 13.F, these are hard limits — not targets. Scheduled duty should be planned well within these maximums.
+
+🔵 STATUS: CLEAR - The contract explicitly states duty time limits in Section 13.F.1.
+
+
+⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.""",
+    },
+
+    'ja_limits': {
+        'keywords': ['ja limit', 'junior assignment limit', 'how many ja', 'how many junior assignment',
+                     'ja per month', 'ja in 3 months', 'ja rolling', 'max ja',
+                     'maximum junior assignment', 'ja frequency', 'how often can i be ja'],
+        'answer': """📄 CONTRACT LANGUAGE: "Under no circumstances shall the Company involuntary assign a Pilot to a JA for more than two (2) independent involuntary assignments in any rolling three (3) Month period."
+📍 Section 14.O, Page 188
+
+"A Pilot shall not be subject to a JA without his consent when he is on Vacation."
+📍 Section 14.O, Page 188
+
+"No Pilot may be involuntary assigned into a JA prior to forty-eight (48) hours before the scheduled departure time."
+📍 Section 14.O, Page 188
+
+📝 EXPLANATION: Per the contract, Junior Assignment limits are:
+- Maximum 2 involuntary JAs in any rolling 3-month period
+- Cannot be junior assigned while on Vacation
+- Cannot be junior assigned more than 48 hours before departure
+- JA must follow inverse seniority order (most junior pilot first)
+- JA Premium: 200% for 1st JA in rolling 3 months, 250% for 2nd JA (Section 3.R)
+- R-1, R-3, and R-4 pilots are NOT eligible for JA (Section 14.O.14)
+- R-2 pilots are eligible for JA at international locations ONLY (Section 14.O.14)
+
+🔵 STATUS: CLEAR - The contract explicitly states JA limits in Section 14.O.
+
+
+⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.""",
+    },
+
+    'extension_limits': {
+        'keywords': ['extension limit', 'how many extensions', 'extension per month',
+                     'max extensions', 'maximum extensions', 'extensions per month',
+                     'how often can i be extended', 'extension frequency', 'extension rules'],
+        'answer': """📄 CONTRACT LANGUAGE: "A Pilot shall not be extended more than one (1) time per Month."
+📍 Section 14.N.6, Page 186
+
+"An Extension shall not cause a Pilot to exceed the applicable Duty Time limitations of Section 13."
+📍 Section 14.N, Page 185
+
+📝 EXPLANATION: Per the contract, Extension limits are:
+- Maximum 1 involuntary extension per calendar month (Section 14.N.6)
+- Extensions cannot exceed duty time limits (16hr/18hr/20hr per Section 13.F)
+- Extensions cannot cause a pilot to miss a scheduled Day Off beyond 0200 LDT (Section 15.A.7)
+- An Extension is defined as an involuntary assignment to additional duty after the last segment of a pilot's originally scheduled Trip Pairing
+
+If you have been extended more than once in a month, this is a potential contract violation.
+
+🔵 STATUS: CLEAR - The contract explicitly states the one-extension-per-month limit in Section 14.N.6.
+
+
+⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.""",
+    },
+}
+
+def _match_tier1_rule(question_lower):
+    """Check if a question matches a Tier 1 fixed-value rule.
+    Returns the rule key or None."""
+    for rule_key, rule in TIER1_RULES.items():
+        if any(kw in question_lower for kw in rule['keywords']):
+            return rule_key
+    return None
+
 def _parse_pay_question(question_lower):
     """Parse a pay rate question and return (aircraft, position, year) or None."""
     # Extract year
@@ -1877,7 +2061,6 @@ def _format_pay_answer(aircraft, position, year):
 
 🔵 STATUS: CLEAR - The contract explicitly provides the DOS pay rates in Appendix A and the annual increase formula in Section 3.B.3.
 
-⚡ Instant answer from pre-computed pay table (no API cost)
 
 ⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes."""
 
@@ -1893,7 +2076,6 @@ def _format_definition_answer(term, definition):
 
 🔵 STATUS: CLEAR - The contract explicitly defines this term in Section 2.
 
-⚡ Instant answer from contract definitions (no API cost)
 
 ⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes."""
 
@@ -1905,6 +2087,19 @@ def tier1_instant_answer(question_lower):
     Returns (answer, status, response_time) or None if not a Tier 1 question.
     """
     start = time.time()
+
+    # --- TIER 1 RULE LOOKUPS (check BEFORE scenario detection) ---
+    # These are "what is the rule?" questions that match keywords also
+    # found in scenarios, so they must be checked first.
+    # Only triggers on clean rule-lookup phrasing, not scenario context.
+    rule_key = _match_tier1_rule(question_lower)
+    if rule_key:
+        # Extra guard: if the question contains specific numeric scenario details,
+        # fall through to the API instead (e.g., "I had 8 hours rest after 16 hour duty")
+        has_numeric_scenario = re.search(r'\d+(?:\.\d+)?\s*hours?\s*(?:of\s+)?(?:duty|rest|block|on duty)', question_lower)
+        if not has_numeric_scenario:
+            answer = TIER1_RULES[rule_key]['answer']
+            return answer, 'CLEAR', round(time.time() - start, 1)
 
     # --- SCENARIO DETECTION: If question has duty/block/TAFD numbers, skip Tier 1 ---
     # These need the full API with pre-computed pay calculator
@@ -1980,9 +2175,6 @@ def ask_question(question, chunks, embeddings, openai_client, anthropic_client, 
     cached_result = semantic_cache.lookup(question_embedding, contract_id)
     if cached_result is not None:
         cached_answer, cached_status, cached_time = cached_result
-        # Add cache hit badge if not already present
-        if '⚡ Cached answer' not in cached_answer:
-            cached_answer += "\n\n⚡ Cached answer (no API cost)"
         return cached_answer, cached_status, 0.0
 
     answer, status, response_time = _ask_question_api(
