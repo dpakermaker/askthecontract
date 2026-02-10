@@ -502,89 +502,135 @@ def log_rating(question_text, rating, comment=""):
 class SemanticCache:
     """Turso-backed persistent cache with in-memory similarity search.
     
+    Uses Turso HTTP API — no extra packages needed.
     On startup: loads all cached Q&A from Turso into memory.
     On new answer: writes to both memory AND Turso.
     On restart/deploy: memory reloads from Turso — nothing lost.
     Falls back to memory-only if Turso is unavailable.
     """
     SIMILARITY_THRESHOLD = 0.93
-    MAX_ENTRIES = 2000  # Turso can hold way more than RAM-only
+    MAX_ENTRIES = 2000
 
     def __init__(self):
         self._lock = threading.Lock()
-        self._entries = {}  # contract_id -> [(embedding, question, answer, status, time)]
-        self._turso_url = os.environ.get('TURSO_DATABASE_URL', '')
-        self._turso_token = os.environ.get('TURSO_AUTH_TOKEN', '')
+        self._entries = {}
         self._turso_available = False
-        self._init_turso()
+        turso_url = os.environ.get('TURSO_DATABASE_URL', '')
+        self._turso_token = os.environ.get('TURSO_AUTH_TOKEN', '')
+        # Convert libsql:// URL to https:// for HTTP API
+        if turso_url and self._turso_token:
+            self._http_url = turso_url.replace('libsql://', 'https://') + '/v3/pipeline'
+            self._init_turso()
+        else:
+            self._http_url = ''
+            st.write("[Cache] No Turso credentials — memory-only mode")
+
+    def _turso_request(self, statements):
+        """Send SQL statements to Turso via HTTP API."""
+        import urllib.request
+        import base64 as b64module
+        requests_body = []
+        for stmt in statements:
+            if isinstance(stmt, str):
+                requests_body.append({"type": "execute", "stmt": {"sql": stmt}})
+            elif isinstance(stmt, dict):
+                requests_body.append({"type": "execute", "stmt": stmt})
+        requests_body.append({"type": "close"})
+        
+        data = json.dumps({"requests": requests_body}).encode('utf-8')
+        req = urllib.request.Request(
+            self._http_url,
+            data=data,
+            headers={
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {self._turso_token}'
+            }
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return json.loads(resp.read().decode('utf-8'))
+        except Exception as e:
+            st.write(f"[Cache] Turso HTTP error: {e}")
+            return None
 
     def _init_turso(self):
-        """Initialize Turso connection and create table if needed."""
-        if not self._turso_url or not self._turso_token:
-            print("[Cache] No Turso credentials found — running memory-only cache")
-            return
+        """Initialize Turso table via HTTP API."""
         try:
-            import libsql_experimental as libsql
-            self._conn = libsql.connect("cache.db", sync_url=self._turso_url, auth_token=self._turso_token)
-            self._conn.sync()
-            self._conn.execute("""
-                CREATE TABLE IF NOT EXISTS answer_cache (
+            result = self._turso_request([
+                """CREATE TABLE IF NOT EXISTS answer_cache (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     contract_id TEXT NOT NULL,
                     question TEXT NOT NULL,
                     answer TEXT NOT NULL,
                     status TEXT,
                     response_time REAL,
-                    embedding BLOB NOT NULL,
+                    embedding_b64 TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            self._conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_cache_contract 
-                ON answer_cache(contract_id)
-            """)
-            self._conn.commit()
-            self._conn.sync()
-            self._turso_available = True
-            self._load_from_turso()
-            print(f"[Cache] Turso connected — loaded {sum(len(v) for v in self._entries.values())} cached answers")
-        except ImportError:
-            print("[Cache] libsql_experimental not installed — running memory-only cache")
+                )""",
+                "CREATE INDEX IF NOT EXISTS idx_cache_contract ON answer_cache(contract_id)"
+            ])
+            if result:
+                self._turso_available = True
+                self._load_from_turso()
+                total = sum(len(v) for v in self._entries.values())
+                st.write(f"[Cache] ✅ Turso connected — loaded {total} cached answers")
+            else:
+                st.write("[Cache] Turso init failed — memory-only mode")
         except Exception as e:
-            print(f"[Cache] Turso init failed: {e} — running memory-only cache")
+            st.write(f"[Cache] Turso init error: {e} — memory-only mode")
 
     def _load_from_turso(self):
-        """Load all cached entries from Turso into memory on startup."""
+        """Load all cached entries from Turso into memory."""
         if not self._turso_available:
             return
+        import base64 as b64module
         try:
-            rows = self._conn.execute(
-                "SELECT contract_id, question, answer, status, response_time, embedding FROM answer_cache ORDER BY created_at DESC"
-            ).fetchall()
+            result = self._turso_request([
+                "SELECT contract_id, question, answer, status, response_time, embedding_b64 FROM answer_cache ORDER BY created_at DESC"
+            ])
+            if not result or 'results' not in result:
+                return
+            # Parse response — results[0] is our SELECT
+            select_result = result['results'][0]
+            if select_result.get('type') != 'ok':
+                return
+            rows = select_result['response']['result'].get('rows', [])
             for row in rows:
-                contract_id, question, answer, status, response_time, emb_bytes = row
-                embedding = np.frombuffer(emb_bytes, dtype=np.float32)
+                contract_id = row[0]['value']
+                question = row[1]['value']
+                answer = row[2]['value']
+                status = row[3]['value'] if row[3]['type'] != 'null' else ''
+                response_time = float(row[4]['value']) if row[4]['type'] != 'null' else 0.0
+                emb_b64 = row[5]['value']
+                embedding = np.frombuffer(b64module.b64decode(emb_b64), dtype=np.float32)
                 if contract_id not in self._entries:
                     self._entries[contract_id] = []
                 if len(self._entries[contract_id]) < self.MAX_ENTRIES:
                     self._entries[contract_id].append((embedding, question, answer, status, response_time))
         except Exception as e:
-            print(f"[Cache] Failed to load from Turso: {e}")
+            st.write(f"[Cache] Failed to load from Turso: {e}")
 
     def _save_to_turso(self, embedding, question, answer, status, response_time, contract_id):
-        """Persist a new cache entry to Turso."""
+        """Persist a new cache entry to Turso via HTTP API."""
         if not self._turso_available:
             return
+        import base64 as b64module
         try:
-            emb_bytes = embedding.astype(np.float32).tobytes()
-            self._conn.execute(
-                "INSERT INTO answer_cache (contract_id, question, answer, status, response_time, embedding) VALUES (?, ?, ?, ?, ?, ?)",
-                (contract_id, question, answer, status, response_time, emb_bytes)
-            )
-            self._conn.commit()
-            self._conn.sync()
+            emb_b64 = b64module.b64encode(embedding.astype(np.float32).tobytes()).decode('ascii')
+            stmt = {
+                "sql": "INSERT INTO answer_cache (contract_id, question, answer, status, response_time, embedding_b64) VALUES (?, ?, ?, ?, ?, ?)",
+                "args": [
+                    {"type": "text", "value": contract_id},
+                    {"type": "text", "value": question},
+                    {"type": "text", "value": answer},
+                    {"type": "text", "value": status or ""},
+                    {"type": "float", "value": str(response_time)},
+                    {"type": "text", "value": emb_b64}
+                ]
+            }
+            self._turso_request([stmt])
         except Exception as e:
-            print(f"[Cache] Failed to save to Turso: {e}")
+            st.write(f"[Cache] Failed to save to Turso: {e}")
 
     def lookup(self, embedding, contract_id):
         with self._lock:
@@ -605,17 +651,15 @@ class SemanticCache:
             if contract_id not in self._entries:
                 self._entries[contract_id] = []
             entries = self._entries[contract_id]
-            # Check for duplicate before storing
             for cached_emb, _, _, _, _ in entries:
                 score = np.dot(embedding, cached_emb) / (
                     np.linalg.norm(embedding) * np.linalg.norm(cached_emb)
                 )
                 if score > self.SIMILARITY_THRESHOLD:
-                    return  # Already cached, skip
+                    return
             if len(entries) >= self.MAX_ENTRIES:
                 entries.pop(0)
             entries.append((embedding, question, answer, status, response_time))
-        # Persist to Turso outside the lock
         self._save_to_turso(embedding, question, answer, status, response_time, contract_id)
 
     def clear(self, contract_id=None):
@@ -627,16 +671,17 @@ class SemanticCache:
         if self._turso_available:
             try:
                 if contract_id:
-                    self._conn.execute("DELETE FROM answer_cache WHERE contract_id = ?", (contract_id,))
+                    stmt = {
+                        "sql": "DELETE FROM answer_cache WHERE contract_id = ?",
+                        "args": [{"type": "text", "value": contract_id}]
+                    }
                 else:
-                    self._conn.execute("DELETE FROM answer_cache")
-                self._conn.commit()
-                self._conn.sync()
+                    stmt = "DELETE FROM answer_cache"
+                self._turso_request([stmt])
             except Exception as e:
-                print(f"[Cache] Failed to clear Turso: {e}")
+                st.write(f"[Cache] Failed to clear Turso: {e}")
 
     def stats(self):
-        """Return cache statistics."""
         total = sum(len(v) for v in self._entries.values())
         return {
             'total_entries': total,
