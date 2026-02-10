@@ -388,7 +388,7 @@ QUESTION_CATEGORIES = {
     "Pay → Overtime / Premium": ['overtime', 'open time premium', 'premium pay', 'time and a half'],
     "Pay → Junior Assignment Premium": ['junior assignment premium', 'ja premium', 'ja pay'],
     "Pay → General Calculation": ['pay', 'paid', 'compensation', 'wage', 'salary', 'earning', 'pch'],
-    "Reserve → Types & Definitions": ['reserve type', 'r-1', 'r-2', 'r-3', 'r-4', 'what is reserve'],
+    "Reserve → Types & Definitions": ['reserve type', 'reserve duty', 'reserve rules', 'reserve', 'r-1', 'r-2', 'r-3', 'r-4', 'what is reserve'],
     "Reserve → FIFO": ['fifo', 'first in first out', 'reserve order'],
     "Reserve → Availability / RAP": ['reserve availability', 'rap', 'on call', 'call out'],
     "Reserve → Day-Off Reassignment": ['reserve day off', 'called on day off', 'junior assigned', 'involuntary assign'],
@@ -780,33 +780,203 @@ def find_force_include_chunks(question_lower, all_chunks):
                         break
     return forced
 
+# ============================================================
+# CONTEXT PACKS — Curated essential pages per topic
+# Guarantees the right provisions are always included.
+# Embedding search supplements with anything unusual.
+# ============================================================
+CONTEXT_PACKS = {
+    # PAY questions — Section 3 core + Appendix A + Reserve Pay + Check Airman premiums
+    'pay': {
+        'pages': [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 66, 200, 322, 338],
+        'embedding_top_n': 15,
+        'max_total': 30,
+    },
+    # RESERVE questions — Section 15 + MOU reserve + reserve pay
+    'reserve': {
+        'pages': [193, 194, 195, 196, 197, 198, 199, 200, 384, 385],
+        'embedding_top_n': 15,
+        'max_total': 30,
+    },
+    # SCHEDULING / DAYS OFF — Section 14 key provisions + LOA #15 scheduling + extensions
+    'scheduling': {
+        'pages': [160, 161, 168, 169, 170, 171, 172, 173, 177, 180, 181, 185, 188, 190, 326, 328, 342, 344],
+        'embedding_top_n': 15,
+        'max_total': 30,
+    },
+    # BENEFITS — Section 5 (retirement, insurance)
+    'benefits': {
+        'pages': [71, 72, 73, 74, 75, 76, 77, 78],
+        'embedding_top_n': 10,
+        'max_total': 25,
+    },
+    # TRAINING — Section 12 + Section 22 (Check Airman/Instructor duties)
+    'training': {
+        'pages': [145, 146, 147, 148, 149, 150, 151, 152, 231, 232, 233, 234],
+        'embedding_top_n': 15,
+        'max_total': 30,
+    },
+    # HOURS OF SERVICE — Section 13
+    'hours': {
+        'pages': [151, 152, 153, 154, 155, 156, 157, 158],
+        'embedding_top_n': 10,
+        'max_total': 25,
+    },
+    # VACATION / LEAVE — Sections 8 & 9 + PTO
+    'vacation': {
+        'pages': [105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 121, 122, 123, 124, 125, 126, 127, 129, 130, 132, 134, 139],
+        'embedding_top_n': 10,
+        'max_total': 30,
+    },
+    # SENIORITY / FURLOUGH — Sections 4 & 17
+    'seniority': {
+        'pages': [204, 205, 206, 207, 208, 209, 210, 211, 212, 213],
+        'embedding_top_n': 10,
+        'max_total': 25,
+    },
+    # GRIEVANCE / ARBITRATION — Sections 19 & 20
+    'grievance': {
+        'pages': [216, 217, 218, 219, 220, 221, 222, 223, 224, 225],
+        'embedding_top_n': 10,
+        'max_total': 25,
+    },
+    # EXPENSES / LODGING — Section 6
+    'expenses': {
+        'pages': [86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104],
+        'embedding_top_n': 10,
+        'max_total': 25,
+    },
+}
+
+# Map question categories to context pack keys
+CATEGORY_TO_PACK = {
+    'Pay → Hourly Rate': 'pay',
+    'Pay → Daily Pay Guarantee': 'pay',
+    'Pay → Duty Rig': 'pay',
+    'Pay → Trip Rig / TAFD': 'pay',
+    'Pay → Overtime / Premium': 'pay',
+    'Pay → Junior Assignment Premium': 'pay',
+    'Pay → General Calculation': 'pay',
+    'Reserve → Types & Definitions': 'reserve',
+    'Reserve → FIFO': 'reserve',
+    'Reserve → Availability / RAP': 'reserve',
+    'Reserve → Day-Off Reassignment': 'reserve',
+    'Scheduling → Days Off': 'scheduling',
+    'Scheduling → Rest Periods': 'hours',
+    'Scheduling → Line Construction': 'scheduling',
+    'Scheduling → Reassignment': 'scheduling',
+    'Scheduling → Duty Limits': 'hours',
+    'Training': 'training',
+    'Seniority': 'seniority',
+    'Grievance': 'grievance',
+    'TDY': 'scheduling',
+    'Vacation / Leave': 'vacation',
+    'Benefits': 'benefits',
+    'Furlough': 'seniority',
+}
+
+def get_pack_chunks(pack_key, all_chunks):
+    """Get all chunks from a context pack's essential pages."""
+    if pack_key not in CONTEXT_PACKS:
+        return []
+    pages = set(CONTEXT_PACKS[pack_key]['pages'])
+    return [c for c in all_chunks if c['page'] in pages]
+
+def classify_all_matching_packs(question_text):
+    """Return all pack keys that match the question, ordered by match strength."""
+    q_lower = question_text.lower()
+    pack_scores = {}  # pack_key -> match count
+
+    for category, keywords in QUESTION_CATEGORIES.items():
+        count = sum(1 for kw in keywords if kw in q_lower)
+        if count > 0:
+            pack_key = CATEGORY_TO_PACK.get(category)
+            if pack_key and pack_key in CONTEXT_PACKS:
+                pack_scores[pack_key] = max(pack_scores.get(pack_key, 0), count)
+
+    # Sort by match strength descending
+    sorted_packs = sorted(pack_scores.items(), key=lambda x: x[1], reverse=True)
+    return [pk for pk, _ in sorted_packs]
+
 def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
     question_embedding = get_embedding_cached(question, openai_client)
     question_lower = question.lower()
     forced_chunks = find_force_include_chunks(question_lower, chunks)
 
+    # Cross-topic pack detection — find ALL matching packs
+    matching_packs = classify_all_matching_packs(question)
+
+    if matching_packs:
+        # Merge pages from all matching packs
+        merged_pages = set()
+        for pk in matching_packs:
+            merged_pages.update(CONTEXT_PACKS[pk]['pages'])
+
+        pack_chunks = [c for c in chunks if c['page'] in merged_pages]
+
+        # Multi-pack gets slightly higher cap; single pack stays at 30
+        if len(matching_packs) > 1:
+            max_total = 35
+            embedding_top_n = 10
+        else:
+            max_total = CONTEXT_PACKS[matching_packs[0]].get('max_total', 30)
+            embedding_top_n = CONTEXT_PACKS[matching_packs[0]].get('embedding_top_n', 15)
+
+        # Rank pack chunks by relevance and trim
+        max_pack = max_total - min(embedding_top_n, 5)
+        if len(pack_chunks) > max_pack:
+            # Build chunk ID → index lookup once
+            id_to_idx = {c.get('id'): i for i, c in enumerate(chunks)}
+            pack_scores = []
+            for pc in pack_chunks:
+                idx = id_to_idx.get(pc.get('id'))
+                if idx is not None:
+                    score = cosine_similarity(question_embedding, embeddings[idx])
+                else:
+                    score = 0
+                pack_scores.append((score, pc))
+            pack_scores.sort(reverse=True, key=lambda x: x[0])
+            pack_chunks = [pc for _, pc in pack_scores[:max_pack]]
+    else:
+        # FALLBACK MODE: pure embedding search (General questions)
+        pack_chunks = []
+        embedding_top_n = 30
+        max_total = 30
+
+    # Embedding search
     similarities = []
     for i, chunk_embedding in enumerate(embeddings):
         score = cosine_similarity(question_embedding, chunk_embedding)
         similarities.append((score, chunks[i]))
-
     similarities.sort(reverse=True, key=lambda x: x[0])
-    embedding_chunks = [chunk for score, chunk in similarities[:max_chunks]]
+    embedding_chunks = [chunk for score, chunk in similarities[:embedding_top_n]]
 
+    # Merge: forced first, then pack, then embedding — deduplicated
     seen_ids = set()
     merged = []
+
     for chunk in forced_chunks:
         chunk_id = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
         if chunk_id not in seen_ids:
             seen_ids.add(chunk_id)
             merged.append(chunk)
+
+    for chunk in pack_chunks:
+        chunk_id = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
+        if chunk_id not in seen_ids:
+            seen_ids.add(chunk_id)
+            merged.append(chunk)
+            if len(merged) >= max_total:
+                break
+
     for chunk in embedding_chunks:
         chunk_id = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
         if chunk_id not in seen_ids:
             seen_ids.add(chunk_id)
             merged.append(chunk)
-            if len(merged) >= max_chunks:
+            if len(merged) >= max_total:
                 break
+
     return merged
 
 # ============================================================
@@ -815,19 +985,7 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
 def _ask_question_api(question, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name, conversation_history=None):
     start_time = time.time()
 
-    pay_keywords = ['pay', 'rate', 'hourly', 'salary', 'wage', 'compensation', 'earning', 'make per hour', 'dpg', 'scale', 'duty rig', 'trip rig', 'pch', 'overtime', '150%', '200%', '175%', 'premium']
-    scheduling_keywords = ['day off', 'days off', 'rest period', 'rest requirement', 'schedule', 'line construction', 'composite line', 'regular line', 'reserve line', 'bid line', 'workday', 'work day', 'consecutive days', 'week off', 'time off', 'duty free', 'days a week', 'off per week', 'off a week', 'reserve', 'r-1', 'r-2', 'r-3', 'r-4', 'r1', 'r2', 'r3', 'r4', 'rap', 'fifo', 'junior assignment', 'extension', 'reassign']
-
-    question_lower = question.lower()
-    is_pay_question = any(keyword in question_lower for keyword in pay_keywords)
-    is_scheduling_question = any(keyword in question_lower for keyword in scheduling_keywords)
-
-    if is_pay_question or is_scheduling_question:
-        max_chunks = 100
-    else:
-        max_chunks = 75
-
-    relevant_chunks = search_contract(question, chunks, embeddings, openai_client, max_chunks=max_chunks)
+    relevant_chunks = search_contract(question, chunks, embeddings, openai_client)
 
     context_parts = []
     for chunk in relevant_chunks:
