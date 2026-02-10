@@ -2670,7 +2670,7 @@ else:
 
         # FEATURE 1: Quick Reference Cards
         st.subheader("📖 Quick Reference")
-        st.caption("Zero AI — loads instantly")
+
         for card_name, card_data in QUICK_REFERENCE_CARDS.items():
             if st.button(f"{card_data['icon']} {card_name}", key=f"ref_{card_name}", use_container_width=True):
                 st.session_state.show_reference = card_name
