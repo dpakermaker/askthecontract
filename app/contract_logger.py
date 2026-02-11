@@ -275,16 +275,24 @@ class ContractLogger:
 
         if self._turso_available:
             try:
+                # Diagnostic: raw count with no filters
+                diag = self._turso_request([
+                    "SELECT COUNT(*) FROM questions_log",
+                    "SELECT contract_id, COUNT(*) FROM questions_log GROUP BY contract_id",
+                    {"sql": "SELECT question_text, COUNT(*) as cnt FROM questions_log GROUP BY question_text ORDER BY cnt DESC LIMIT 3"}
+                ])
+                print(f"[TopQ-diag] full diagnostic: {str(diag)[:800]}")
+                
+                # Now run the actual query
                 stmt = {"sql": sql}
                 if turso_args:
                     stmt["args"] = turso_args
                 raw = self._turso_request([stmt])
-                print(f"[TopQ-debug] raw: {str(raw)[:500]}")
+                print(f"[TopQ-debug] actual query raw: {str(raw)[:500]}")
                 if raw and 'results' in raw:
                     select_result = raw['results'][0]
                     if select_result.get('type') == 'ok':
                         raw_rows = select_result['response']['result'].get('rows', [])
-                        print(f"[TopQ-debug] raw_rows count: {len(raw_rows)}")
                         parsed = []
                         for row in raw_rows:
                             parsed.append(tuple(
@@ -296,8 +304,6 @@ class ContractLogger:
                             ))
                         if parsed:
                             return parsed
-                    else:
-                        print(f"[TopQ-debug] select not ok: {select_result}")
             except Exception as e:
                 print(f"[TopQ-debug] exception: {e}")
         return self._local_query(sql, local_params)
