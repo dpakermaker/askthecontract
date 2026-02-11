@@ -11,13 +11,16 @@ import os
 from pathlib import Path
 from datetime import datetime
 import re
-import math
 
 # Add app directory to path
 sys.path.append(str(Path(__file__).parent))
 
 from contract_manager import ContractManager
-from contract_logger import ContractLogger
+try:
+    from contract_logger import ContractLogger
+except ImportError:
+    class ContractLogger:
+        def log_question(self, *args, **kwargs): pass
 
 # Page config
 st.set_page_config(
@@ -32,6 +35,59 @@ st.set_page_config(
 # ============================================================
 
 QUICK_REFERENCE_CARDS = {
+    "How to File a Grievance": {
+        "icon": "📋",
+        "content": """## How to File a Non-Disciplinary Grievance
+*Per Section 19.C of the JCBA (Pages 220-222)*
+
+There are two types of Grievances: Disciplinary (Section 19.B) and Non-Disciplinary (Section 19.C). Below is the Non-Disciplinary process — the most common type for pay, scheduling, and contract interpretation disputes.
+
+**Step 1: Attempt Informal Resolution — DEADLINE: 30 Days**
+Per Section 19.C.1: You or a Union Representative must first attempt to resolve the dispute informally with the Chief Pilot, or designee, via phone conversation, personal meeting, or email within **30 Days** after you became aware, or reasonably should have become aware, of the event.
+
+**Step 2: File a Written Grievance — DEADLINE: 20 Business Days after Step 1**
+Per Section 19.C.2: If not resolved informally, you or the Union may file a written Grievance within **20 Business Days** after the informal discussion. Per Section 19.C.2, the written request must include:
+- A statement of the known facts
+- The specific sections of the Agreement allegedly violated
+- The dates out of which the Grievance arose
+- A request for relief (what remedy you are seeking)
+
+File this with the **Director of Operations, or designee** (Section 19.C.2).
+
+**Step 3: Grievance Meeting — Within 10 Business Days**
+Per Section 19.C.3: A Grievance Meeting between the Grievant, Union, and Director of Operations (or designee) shall be held within **10 Business Days** after receipt of your written request. The meeting is telephonic unless the parties mutually agree to meet in person.
+
+**Step 4: Exchange Documents — At Least 1 Business Day Before Meeting**
+Per Section 19.C.4-5: Both sides must provide copies of any documents, witness statements, and records of how the Company has interpreted or applied the provision in dispute. Documents must be exchanged **at least 1 Business Day** before the Grievance Meeting.
+
+**Step 5: Company Decision — Within 10 Business Days After Meeting**
+Per Section 19.C.7: The Director of Operations, or designee, shall issue a **written decision** (including any relief granted) to you and the Union within **10 Business Days** after the Grievance Meeting.
+
+**Step 6: Appeal to System Board — DEADLINE: 20 Business Days**
+Per Section 19.B.20 / Section 20: If you or the Union are not satisfied with the Company's decision, the Union may make a **written appeal** to the NAC Pilots System Board of Adjustment within **20 Business Days** after receipt of the decision.
+
+---
+
+**⏰ CRITICAL DEADLINES — Missing any deadline forfeits your Grievance:**
+
+| Step | Action | Deadline |
+|------|--------|----------|
+| 1 | Informal resolution attempt | 30 Days from awareness |
+| 2 | File written Grievance | 20 Business Days after Step 1 |
+| 3 | Grievance Meeting held | 10 Business Days after filing |
+| 4 | Document exchange | 1 Business Day before meeting |
+| 5 | Company written decision | 10 Business Days after meeting |
+| 6 | Appeal to System Board | 20 Business Days after decision |
+
+Per Section 19.D.1: Time limits may be extended by **written agreement** between Company and Grievant or Union.
+
+Per Section 19.D.2: **Failure to file or advance any Grievance within the time periods prescribed shall result in the waiver and abandonment of the Grievance.**
+
+Per Section 19.D.3: All notifications, requests, and decisions shall be **in writing**.
+
+⚠️ **Contact your Union Representative (EXCO member) immediately when you identify a potential violation. Do not wait.**"""
+    },
+
     "What is a Pay Discrepancy?": {
         "icon": "💰",
         "content": """## What is a Pay Discrepancy?
@@ -278,250 +334,6 @@ All Regular, Composite, Reserve, and Domicile Flex Lines must have EITHER:
 ⚠️ *Refer to LOA #15 (Pages 320-349) which supersedes original Section 14.E provisions. Also see Section 13 (Hours of Service) for Duty Time and Rest requirements.*"""
     },
 
-    "Pay Calculation Guide": {
-        "icon": "🧮",
-        "content": """## Pay Calculation Guide — The 4-Way Comparison
-*Per Section 3.E of the JCBA (Pages 52-53)*
-
-Every trip or duty day, you are paid the **GREATER** of four calculations. The Company must pay whichever is highest.
-
----
-
-**1. Block Time PCH**
-Your actual flight time (brake release to block in).
-- Example: 6.0 hours of flying = 6.0 PCH
-
-**2. Duty Rig (1:2 ratio)**
-One PCH for every two hours of total Duty Time, prorated minute-by-minute.
-- Formula: Total Duty Hours ÷ 2
-- Example: 12 hours duty = 6.0 PCH
-
-**3. Daily Pay Guarantee (DPG)**
-Minimum pay per workday: **3.82 PCH per day**
-- For multi-day trips, multiply by number of days
-- Example: 3-day trip = 3.82 × 3 = 11.46 PCH
-
-**4. Trip Rig (TAFD ÷ 4.9)**
-Time Away From Domicile divided by 4.9, prorated minute-by-minute.
-- Formula: Total TAFD Hours ÷ 4.9
-- Example: 40 hours TAFD = 8.16 PCH
-- Only applies to multi-day trips (not single duty periods)
-
----
-
-**Example Calculation:**
-A 3-day trip with 12 hours block, 28 hours duty, 38 hours TAFD:
-| Method | Calculation | PCH |
-|--------|-------------|-----|
-| Block Time | 12.0 hours | 12.0 |
-| Duty Rig | 28 ÷ 2 | 14.0 |
-| DPG | 3.82 × 3 days | 11.46 |
-| Trip Rig | 38 ÷ 4.9 | 7.76 |
-
-**Winner: Duty Rig at 14.0 PCH** → 14.0 × your hourly rate = trip pay
-
----
-
-**Premium Multipliers (applied AFTER the 4-way comparison):**
-| Situation | Premium | Section |
-|-----------|---------|---------|
-| Open Time pickup | 150% | 3.N |
-| Day Off duty (weather/mx/ATC) | 150% | 3.Q.1 |
-| Junior Assignment (1st in 3 months) | 200% | 3.R.1 |
-| Junior Assignment (2nd in 3 months) | 250% | 3.R.2 |
-| Check Airman Day Off admin | 175% | 3.S.5.b |
-
-**Current Hourly Rate = DOS Rate × 1.14869** (7 annual 2% increases since July 2018)
-
-⚠️ Always verify your pay stub matches the highest of the four calculations."""
-    },
-
-    "Extension Rules": {
-        "icon": "⏰",
-        "content": """## Extension Rules
-*Per Section 14.N of the JCBA (Pages 185-186)*
-
-An Extension is an involuntary assignment to additional duty after your originally scheduled Trip Pairing.
-
----
-
-**Hard Limits:**
-- **1 extension per month maximum** (Section 14.N.6)
-- Extensions **cannot exceed duty time limits** (16hr basic / 18hr augmented / 20hr heavy crew per Section 13.F)
-- Extensions **cannot cause you to miss a Day Off** beyond 0200 LDT (Section 15.A.7)
-
-**Your Rights When Extended:**
-- You must be notified before your last flight segment departs (Section 14.K.1)
-- Extension must not violate your legality (rest, duty limits)
-- If you've already been extended once this month, you **cannot** be extended again
-
-**Pay for Extensions:**
-- **150% overtime premium** applies to all duty performed during the extension (Section 14.K.2.i / Section 3.Q)
-- Pay is calculated using the same 4-way comparison (Block, Duty Rig, DPG, Trip Rig) — whichever is greater
-- The overtime premium applies to the PCH earned
-
-**Mechanical Delay During Extension:**
-- If delayed beyond 3 hours after original Duty Off Time due to circumstances beyond Company control (weather, mx, ATC), you finish the trip (Section 14.K.1.h)
-- Company must provide hotel and transportation if needed
-
-**What to Track:**
-- ✅ Time of extension notification
-- ✅ Your original scheduled Duty Off time
-- ✅ Whether this is your 1st or 2nd extension this month
-- ✅ Total duty time (to verify limits aren't exceeded)
-- ✅ Whether duty extends into a scheduled Day Off
-
-⚠️ **If you've been extended more than once in a calendar month, contact your union representative immediately — this is a potential contract violation.**"""
-    },
-
-    "Junior Assignment Rules": {
-        "icon": "⚖️",
-        "content": """## Junior Assignment (JA) Rules
-*Per Section 14.O of the JCBA (Pages 188-190) and Section 3.R (Pages 61-62)*
-
-A Junior Assignment is when the Company involuntarily assigns a pilot to duty on a Day Off.
-
----
-
-**Hard Limits:**
-- **Maximum 2 JAs in any rolling 3-month period** (Section 14.O.12)
-- Cannot be JA'd while on **Vacation** (Section 14.O)
-- Cannot be JA'd more than **48 hours** before departure (Section 14.O)
-- Must follow **inverse seniority order** — most junior available pilot first (Section 14.O.4)
-
-**Who Can Be JA'd:**
-
-| Reserve Type | JA Eligible? | Notes |
-|-------------|-------------|-------|
-| R-1 | ❌ No | Section 14.O.14 |
-| R-2 | ⚠️ International only | Section 14.O.14 |
-| R-3 | ❌ No | Section 14.O.14 |
-| R-4 | ❌ No | Reassigned, not eligible |
-| Line holders | ✅ Yes | On Day Off, inverse seniority |
-
-**JA Pay Premiums:**
-
-| Situation | Premium | Section |
-|-----------|---------|---------|
-| 1st JA in rolling 3 months | **200%** of hourly rate | 3.R.1 |
-| 2nd JA in rolling 3 months | **250%** of hourly rate | 3.R.2 |
-
-Premium applies to ALL PCH earned during the JA, paid **in addition** to monthly pay (Section 3.R.3).
-
-**Example:** Year 8 Captain, 10-hour duty day, 1st JA in 3 months:
-- Duty Rig: 10 ÷ 2 = 5.0 PCH (highest of 4-way comparison)
-- JA Premium: 5.0 × 191.22 × 200% = 1,912.20
-
-**What to Track:**
-- ✅ Date/time of JA notification
-- ✅ Was inverse seniority followed? (Were more junior pilots available?)
-- ✅ Is this your 1st or 2nd JA in the rolling 3-month period?
-- ✅ Were you on a scheduled Day Off?
-- ✅ Total duty time and block time for pay calculation
-
-⚠️ **If you've been JA'd 3 times in 3 months, or JA'd on Vacation, contact your union representative immediately.**"""
-    },
-
-    "Open Time & Trip Pickup": {
-        "icon": "✈️",
-        "content": """## Open Time & Trip Pickup
-*Per Section 14.M-N of the JCBA (Pages 183-186)*
-
-Open Time consists of Trip Pairings and Reserve Assignments remaining after Final Bid Awards, plus any new trips that become available during the month.
-
----
-
-**How to Pick Up Open Time:**
-1. Open Time is posted on the Company's system
-2. Pilots may request to pick up available trips during SAP (Schedule Adjustment Period) or during the month
-3. Awards are based on **seniority** — most senior requesting pilot gets the trip
-
-**Open Time Premium Pay:**
-- **150% of applicable hourly rate** for all PCH earned (Section 3.N)
-- This is a significant pay boost — always check what's available
-- Premium applies to the GREATER of the 4-way pay comparison (Block, Duty Rig, DPG, Trip Rig)
-
-**Example:** Year 8 Captain picks up a trip with 8.0 PCH:
-- 8.0 × 191.22 × 150% = 2,294.64
-
-**SAP (Schedule Adjustment Period):**
-- Occurs after Initial Line Awards are published (Section 14.H)
-- Pilots can pick up trips, trade trips, or drop trips during SAP
-- Seniority-based awards
-
-**Trip Trading:**
-- Pilots may trade trips with other pilots (Section 14.L)
-- Both pilots must be legal for the other's trip
-- Trades must not create conflicts with existing schedule
-
-**Key Restrictions:**
-- Cannot pick up Open Time that conflicts with scheduled assignments
-- Cannot exceed duty time limits or violate rest requirements
-- Must maintain minimum Days Off requirements
-- Company may restrict pickups to maintain operational coverage
-
-**What to Track:**
-- ✅ Open Time posting times
-- ✅ Your pickup requests and timestamps
-- ✅ Whether seniority order was followed in awards
-- ✅ PCH earned vs. what shows on pay stub (verify 150% applied)
-
-⚠️ **Open Time at 150% is one of the best ways to increase your monthly pay. Check the board regularly.**"""
-    },
-
-    "How to File a Grievance": {
-        "icon": "📋",
-        "content": """## How to File a Non-Disciplinary Grievance
-*Per Section 19.C of the JCBA (Pages 220-222)*
-
-There are two types of Grievances: Disciplinary (Section 19.B) and Non-Disciplinary (Section 19.C). Below is the Non-Disciplinary process — the most common type for pay, scheduling, and contract interpretation disputes.
-
-**Step 1: Attempt Informal Resolution — DEADLINE: 30 Days**
-Per Section 19.C.1: You or a Union Representative must first attempt to resolve the dispute informally with the Chief Pilot, or designee, via phone conversation, personal meeting, or email within **30 Days** after you became aware, or reasonably should have become aware, of the event.
-
-**Step 2: File a Written Grievance — DEADLINE: 20 Business Days after Step 1**
-Per Section 19.C.2: If not resolved informally, you or the Union may file a written Grievance within **20 Business Days** after the informal discussion. Per Section 19.C.2, the written request must include:
-- A statement of the known facts
-- The specific sections of the Agreement allegedly violated
-- The dates out of which the Grievance arose
-- A request for relief (what remedy you are seeking)
-
-File this with the **Director of Operations, or designee** (Section 19.C.2).
-
-**Step 3: Grievance Meeting — Within 10 Business Days**
-Per Section 19.C.3: A Grievance Meeting between the Grievant, Union, and Director of Operations (or designee) shall be held within **10 Business Days** after receipt of your written request. The meeting is telephonic unless the parties mutually agree to meet in person.
-
-**Step 4: Exchange Documents — At Least 1 Business Day Before Meeting**
-Per Section 19.C.4-5: Both sides must provide copies of any documents, witness statements, and records of how the Company has interpreted or applied the provision in dispute. Documents must be exchanged **at least 1 Business Day** before the Grievance Meeting.
-
-**Step 5: Company Decision — Within 10 Business Days After Meeting**
-Per Section 19.C.7: The Director of Operations, or designee, shall issue a **written decision** (including any relief granted) to you and the Union within **10 Business Days** after the Grievance Meeting.
-
-**Step 6: Appeal to System Board — DEADLINE: 20 Business Days**
-Per Section 19.B.20 / Section 20: If you or the Union are not satisfied with the Company's decision, the Union may make a **written appeal** to the NAC Pilots System Board of Adjustment within **20 Business Days** after receipt of the decision.
-
----
-
-**⏰ CRITICAL DEADLINES — Missing any deadline forfeits your Grievance:**
-
-| Step | Action | Deadline |
-|------|--------|----------|
-| 1 | Informal resolution attempt | 30 Days from awareness |
-| 2 | File written Grievance | 20 Business Days after Step 1 |
-| 3 | Grievance Meeting held | 10 Business Days after filing |
-| 4 | Document exchange | 1 Business Day before meeting |
-| 5 | Company written decision | 10 Business Days after meeting |
-| 6 | Appeal to System Board | 20 Business Days after decision |
-
-Per Section 19.D.1: Time limits may be extended by **written agreement** between Company and Grievant or Union.
-
-Per Section 19.D.2: **Failure to file or advance any Grievance within the time periods prescribed shall result in the waiver and abandonment of the Grievance.**
-
-Per Section 19.D.3: All notifications, requests, and decisions shall be **in writing**.
-
-⚠️ **Contact your Union Representative (EXCO member) immediately when you identify a potential violation. Do not wait.**"""
-    },
-
     "What Evidence to Save": {
         "icon": "📁",
         "content": """## What Evidence to Save
@@ -557,13 +369,6 @@ If you believe the contract has been violated, start saving evidence immediately
 - ✅ Initial Call times and your response times
 - ✅ FIFO list at time of assignment
 - ✅ Whether proper FIFO order was followed
-
-**For Grievances:**
-- ✅ All emails between you, the Company, and your Union Rep related to the grievance
-- ✅ Written grievance filing with date submitted
-- ✅ Company's written response/decision
-- ✅ Dates of each step (informal discussion, written filing, meeting, decision)
-- ✅ Names of managers and representatives involved
 
 **How to Save:**
 - Screenshot everything on your phone immediately
@@ -677,11 +482,20 @@ def get_answer_modifier(category_label):
 # Logging only, no AI processing
 # ============================================================
 
-def log_rating(question_text, rating, contract_id, comment=""):
-    """Log a rating via ContractLogger (Turso-backed)."""
+def log_rating(question_text, rating, comment=""):
+    """Log a rating to file. No AI."""
     try:
-        logger = init_logger()
-        logger.log_rating(question_text, rating, contract_id, comment)
+        log_dir = Path(__file__).parent.parent / "logs"
+        log_dir.mkdir(exist_ok=True)
+        rating_file = log_dir / "answer_ratings.jsonl"
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "question": question_text,
+            "rating": rating,
+            "comment": comment
+        }
+        with open(rating_file, "a") as f:
+            f.write(json.dumps(entry) + "\n")
         return True
     except:
         return False
@@ -939,7 +753,6 @@ def init_contract_manager():
     return ContractManager()
 
 @st.cache_resource
-@st.cache_resource
 def init_logger():
     return ContractLogger()
 
@@ -951,84 +764,6 @@ def load_contract(contract_id):
 
 def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
-
-# ============================================================
-# BM25 KEYWORD SEARCH
-# Catches exact contract terms that embeddings might miss.
-# No external packages — pure Python implementation.
-# ============================================================
-# Contract-specific stopwords — common English words plus filler
-_BM25_STOPWORDS = frozenset([
-    'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-    'should', 'may', 'might', 'shall', 'can', 'to', 'of', 'in', 'for',
-    'on', 'with', 'at', 'by', 'from', 'as', 'into', 'about', 'between',
-    'through', 'after', 'before', 'during', 'and', 'or', 'but', 'not',
-    'no', 'nor', 'if', 'then', 'than', 'that', 'this', 'these', 'those',
-    'it', 'its', 'he', 'his', 'him', 'i', 'my', 'me', 'we', 'our',
-    'you', 'your', 'they', 'their', 'what', 'which', 'who', 'when',
-    'where', 'how', 'all', 'each', 'any', 'both', 'such', 'other',
-])
-
-def _bm25_tokenize(text):
-    """Tokenize text for BM25. Preserves section numbers and hyphenated terms."""
-    # Lowercase, split on whitespace and punctuation but keep hyphens and dots in terms
-    tokens = re.findall(r'[a-z0-9](?:[a-z0-9\-\.]*[a-z0-9])?', text.lower())
-    return [t for t in tokens if t not in _BM25_STOPWORDS and len(t) > 1]
-
-@st.cache_data(show_spinner=False)
-def _build_bm25_index(_chunk_texts):
-    """Pre-compute BM25 index from chunk texts. Cached so it only runs once."""
-    # _chunk_texts is a tuple of strings (hashable for st.cache_data)
-    doc_tokens = [_bm25_tokenize(text) for text in _chunk_texts]
-    doc_count = len(doc_tokens)
-    avg_dl = sum(len(d) for d in doc_tokens) / doc_count if doc_count > 0 else 1
-
-    # Document frequency: how many docs contain each term
-    df = {}
-    for tokens in doc_tokens:
-        for term in set(tokens):
-            df[term] = df.get(term, 0) + 1
-
-    # IDF: log((N - df + 0.5) / (df + 0.5) + 1)
-    idf = {}
-    for term, freq in df.items():
-        idf[term] = math.log((doc_count - freq + 0.5) / (freq + 0.5) + 1)
-
-    return doc_tokens, idf, avg_dl
-
-def _bm25_search(query, chunks, top_n=15, k1=1.5, b=0.75):
-    """Score all chunks against query using BM25. Returns top_n (score, chunk) pairs."""
-    # Build index (cached after first call)
-    chunk_texts = tuple(c['text'] for c in chunks)
-    doc_tokens, idf, avg_dl = _build_bm25_index(chunk_texts)
-
-    query_tokens = _bm25_tokenize(query)
-    if not query_tokens:
-        return []
-
-    scores = []
-    for i, tokens in enumerate(doc_tokens):
-        dl = len(tokens)
-        score = 0.0
-        # Term frequency map for this doc
-        tf_map = {}
-        for t in tokens:
-            tf_map[t] = tf_map.get(t, 0) + 1
-
-        for qt in query_tokens:
-            if qt in tf_map:
-                tf = tf_map[qt]
-                term_idf = idf.get(qt, 0)
-                numerator = tf * (k1 + 1)
-                denominator = tf + k1 * (1 - b + b * dl / avg_dl)
-                score += term_idf * numerator / denominator
-
-        if score > 0:
-            scores.append((score, chunks[i]))
-
-    scores.sort(reverse=True, key=lambda x: x[0])
-    return scores[:top_n]
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_embedding_cached(question_text, _openai_client):
@@ -1387,108 +1122,6 @@ PROVISION_CHAINS = {
     # NRFO → Section 3.L
     'nrfo': [58],
     'non-routine': [58],
-    # Deadhead pay/rules → Section 3.I, 3.K
-    'deadhead': [56, 57],
-    'deadhead pay': [56, 57],
-    'deadhead rest': [56, 57, 154, 155],
-    'positioning': [56, 57],
-    # Open time / VPA → Section 14.M, 14.N
-    'open time': [183, 184, 185, 186],
-    'vpa': [183, 184, 185, 186],
-    'voluntary pickup': [183, 184, 185, 186],
-    'pick up': [183, 184, 185, 186],
-    'trip trade': [183, 184],
-    # Per diem → Section 3.J
-    'per diem': [57, 58],
-    'meal allowance': [57, 58],
-    'meal money': [57, 58],
-    'hotel': [57, 58],
-    'lodging': [57, 58],
-    # Sick leave → Section 10
-    'sick': [131, 132, 133, 134, 135, 136, 137],
-    'sick call': [131, 132, 133, 134, 135],
-    'sick pay': [131, 132, 133, 134],
-    'calling in sick': [131, 132, 133],
-    'illness': [131, 132, 133, 134],
-    # Furlough / recall → Section 18
-    'furlough': [204, 205, 206, 207, 208, 209, 210],
-    'recall': [204, 205, 206, 207, 208, 209, 210],
-    'layoff': [204, 205, 206, 207],
-    'reduction in force': [204, 205, 206],
-    # Probation / new hire → Section 18
-    'probation': [204, 205, 211, 212],
-    'probationary': [204, 205, 211, 212],
-    'new hire': [204, 205, 211, 212],
-    # Training → Section 12
-    'training pay': [145, 146, 147, 148, 322, 323, 390],
-    'recurrent': [145, 146, 147, 148],
-    'check ride': [145, 146, 147, 148, 322, 323],
-    'simulator': [145, 146, 147, 148],
-    'ground school': [145, 146, 147],
-    'initial operating': [145, 146, 147, 148],
-    'ioe': [145, 146, 147, 148],
-    # Insurance / benefits → Section 9
-    'health insurance': [86, 87, 88, 89, 90],
-    '401k': [95, 96, 97, 98],
-    '401(k)': [95, 96, 97, 98],
-    'life insurance': [91, 92, 93],
-    'disability': [93, 94],
-    'dental': [86, 87, 88],
-    'vision': [86, 87, 88],
-    # Upgrade / downgrade
-    'upgrade': [204, 205, 206, 391],
-    'downgrade': [204, 205, 206, 391],
-    'bid for captain': [204, 205, 206],
-    # Commuting
-    'commut': [56, 57, 154, 155],
-    'commuter policy': [56, 57],
-    # Direct Section references by number
-    'section 3': [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63],
-    'section 8': [105, 106, 107, 108, 109, 110, 111, 112, 113],
-    'section 9': [86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98],
-    'section 10': [131, 132, 133, 134, 135, 136, 137],
-    'section 12': [145, 146, 147, 148, 149, 150],
-    'section 13': [151, 152, 153, 154, 155, 156, 157, 158],
-    'section 14': [160, 161, 168, 169, 170, 171, 172, 173, 177, 180, 181, 185, 188, 190],
-    'section 15': [193, 194, 195, 196, 197, 198, 199, 200],
-    'section 18': [204, 205, 206, 207, 208, 209, 210, 211, 212, 213],
-    'section 19': [216, 217, 218, 219, 220, 221, 222, 223, 224, 225],
-    # Direct MOU references by number
-    'mou #1': [379],
-    'mou #2': [381],
-    'mou #3': [382],
-    'mou #4': [383, 384, 385],
-    'mou #5': [386, 387],
-    'mou #6': [388],
-    'mou #7': [390],
-    'mou #8': [391],
-    'mou #9': [392],
-    'mou 1': [379],
-    'mou 2': [381],
-    'mou 3': [382],
-    'mou 4': [383, 384, 385],
-    'mou 5': [386, 387],
-    'mou 6': [388],
-    'mou 7': [390],
-    'mou 8': [391],
-    'mou 9': [392],
-    # Direct LOA references by number
-    'loa #3': [281, 282, 283, 284, 285],
-    'loa #4': [272, 273, 274, 275, 276, 277],
-    'loa #7': [293, 294, 295],
-    'loa #9': [301, 302],
-    'loa #10': [304, 305, 306],
-    'loa #11': [307, 308, 309, 310, 311],
-    'loa #15': [326, 328, 338, 339, 342, 344],
-    'loa #16': [353, 354, 355, 356, 357, 358],
-    'loa 3': [281, 282, 283, 284, 285],
-    'loa 4': [272, 273, 274, 275, 276, 277],
-    'loa 7': [293, 294, 295],
-    'loa 9': [301, 302],
-    'loa 10': [304, 305, 306],
-    'loa 11': [307, 308, 309, 310, 311],
-    'loa 15': [326, 328, 338, 339, 342, 344],
-    'loa 16': [353, 354, 355, 356, 357, 358],
 }
 
 def get_pack_chunks(pack_key, all_chunks):
@@ -1580,12 +1213,7 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
     similarities.sort(reverse=True, key=lambda x: x[0])
     embedding_chunks = [chunk for score, chunk in similarities[:embedding_top_n]]
 
-    # BM25 keyword search — catches exact terms embeddings miss
-    bm25_top_n = min(10, embedding_top_n)
-    bm25_results = _bm25_search(question, chunks, top_n=bm25_top_n)
-    bm25_chunks = [chunk for score, chunk in bm25_results]
-
-    # Merge: forced first, then pack, then BM25, then embedding — deduplicated
+    # Merge: forced first, then pack, then embedding — deduplicated
     seen_ids = set()
     merged = []
 
@@ -1596,14 +1224,6 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
             merged.append(chunk)
 
     for chunk in pack_chunks:
-        chunk_id = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
-        if chunk_id not in seen_ids:
-            seen_ids.add(chunk_id)
-            merged.append(chunk)
-            if len(merged) >= max_total:
-                break
-
-    for chunk in bm25_chunks:
         chunk_id = chunk.get('id', f"{chunk['page']}_{chunk['text'][:50]}")
         if chunk_id not in seen_ids:
             seen_ids.add(chunk_id)
@@ -1859,93 +1479,224 @@ def _ask_question_api(question, chunks, embeddings, openai_client, anthropic_cli
 
     context = "\n\n---\n\n".join(context_parts)
 
-    system_prompt = f"""You are a neutral contract reference tool for the {airline_name} pilot union contract (JCBA). Provide accurate, unbiased analysis based solely on contract language provided.
+    system_prompt = f"""You are a neutral contract reference tool for the {airline_name} pilot union contract (JCBA). Your role is to provide accurate, unbiased contract analysis based solely on the contract language provided to you.
 
-SCOPE: This tool ONLY searches the {airline_name} JCBA. It has NO access to FARs, company manuals/SOPs, company policies/memos, other labor agreements, or employment laws. If asked about these, state: "This tool only searches the {airline_name} pilot contract (JCBA) and cannot answer questions about FAA regulations, company manuals, or other policies outside the contract."
+SCOPE LIMITATION:
+This tool ONLY searches the {airline_name} pilot union contract (JCBA). It does NOT have access to:
+- FAA regulations or Federal Aviation Regulations (FARs)
+- Company Operations Manuals or Standard Operating Procedures (SOPs)
+- Company policies, memos, or bulletins
+- Other labor agreements or side letters not included in the JCBA
+- State or federal employment laws
+If a question appears to be about any of these sources, clearly state: "This tool only searches the {airline_name} pilot contract (JCBA) and cannot answer questions about FAA regulations, company manuals, or other policies outside the contract."
 
-CONVERSATION CONTEXT: Use conversation history for follow-ups. Maintain same position, aircraft type, and parameters unless explicitly changed. Always provide complete answers with full citations even for follow-ups.
+CONVERSATION CONTEXT:
+The user may ask follow-up questions that reference previous answers. When this happens, use the conversation history to understand what they are referring to. Maintain the same position (Captain or First Officer), aircraft type, and other parameters from the previous question unless the user explicitly changes them. For example, if the previous answer was about a B737 Captain and the user asks "what about year 12?" - recalculate using the Year 12 Captain rate for the same aircraft. Always provide a complete answer with full contract citations even for follow-up questions.
 
 CORE PRINCIPLES:
-1. Quote exact contract language with section and page citations
-2. Never interpret beyond what the contract explicitly states
-3. Never assume provisions exist that are not in the provided text
-4. Use neutral language ("the contract states" not "you get" or "company owes")
-5. Acknowledge when the contract is silent; cite all applicable provisions
-6. Read ALL provided sections before answering — look across pay, scheduling, reserve, and hours of service
+1. Quote exact contract language - always use the precise wording from the contract
+2. Cite every quote with section number and page number
+3. Never interpret beyond what the contract explicitly states
+4. Never assume provisions exist that are not in the provided text
+5. Never use directive language like "you get" or "company owes" - instead say "the contract states" or "per the contract language"
+6. Always acknowledge when the contract is silent on a topic
+7. When multiple provisions may apply, cite all of them
 
 ANALYSIS RULES:
-- Check for defined terms — many words have specific contract definitions
-- Note qualifiers: "shall" vs "may", "except", "unless", "notwithstanding", "provided"
-- Distinguish: "scheduled" vs "actual", "assigned" vs "awarded"
-- Distinguish pilot categories: Regular Line, Reserve (R-1/R-2/R-3/R-4), Composite, TDY, Domicile Flex
-- Distinguish assignment types: Trip Pairings, Reserve Assignments, Company-Directed, Training, Deadhead
+- Read ALL provided contract sections before forming your answer
+- Look for provisions that may apply from different sections (pay, scheduling, reserve, hours of service, etc.)
+- Check for defined terms - many words have specific contract definitions
+- Pay attention to qualifiers like "shall", "may", "except", "unless", "notwithstanding", "provided"
+- Note the difference between "scheduled" vs "actual" and "assigned" vs "awarded"
+- Distinguish between different pilot categories: Regular Line holders, Reserve pilots (R-1, R-2, R-3, R-4), Composite Line holders, TDY pilots, Domicile Flex Line holders
+- Distinguish between different types of assignments: Trip Pairings, Reserve Assignments, Company-Directed Assignments, Training, Deadhead
+- When a provision applies only to specific categories, state which categories clearly
 
-KEY DEFINITIONS (from Section 2):
-- Block Time = Brakes released to brakes set. Flight Time = Brake release to block in.
-- Day = Calendar Day 00:00–23:59 LDT. Day Off = Scheduled Day free of ALL Duty at Domicile.
-- DPG = 3.82 PCH minimum per Day of scheduled Duty.
-- Duty Period = Continuous time from Report for Duty until Released and placed into Rest. Rest Period ≠ Day Off.
-- Duty Rig = 1 PCH per 2 hours Duty, prorated minute-by-minute. Trip Rig = TAFD ÷ 4.9.
-- Extension = Involuntary additional Flight/Duty after last segment of Trip Pairing.
-- FIFO = First In, First Out reserve scheduling per Section 15.
-- JA = Junior Assignment: involuntary Duty on Day Off, inverse seniority (most junior first).
+SECTION 2 – KEY CONTRACT DEFINITIONS (Condensed Reference):
+These are official contract definitions from Section 2. Always use these meanings when interpreting contract language:
+- Active Service = Available for Assignment, on Sick Leave, Vacation, or LOA where Longevity accrues. Furlough/unpaid LOA ≠ Active Service.
+- Agreement = This CBA + all Side Letters, MOUs, and LOAs.
+- Aircraft Type = Specific make/model per FARs (e.g., B737, B767).
+- Assignment = Flight, Reserve, Training, or any Company-directed activity; also an awarded Vacancy.
+- Block Time = Brakes released (pushback/taxi) to brakes set at destination.
+- Captain = Pilot in Command, holds Captain bid status.
+- Check Airman (Full) = Company/FAA-approved to instruct, train, check in aircraft, simulator, or classroom.
+- Check Airman (Line/LCA) = Approved for instruction/checking during line operations or classroom.
+- Composite Line = Blank line in Bid Package; constructed after SAP with any mix of Duty/Days Off.
+- Company-Directed Assignment = Scheduled work at Company direction; a scheduled Assignment on a Pilot's Line.
+- Company Provided Benefits = Health Insurance, AD&D, Life Insurance, 401(k). Some at no cost; others cost-shared or Pilot-paid (e.g., STD/LTD buy-up).
+- Daily Pay Guarantee (DPG) = 3.82 PCH minimum per Day of scheduled Duty.
+- Day = Calendar Day 00:00–23:59 LDT.
+- Day Off = Scheduled Day free of ALL Duty, taken at Pilot's Domicile.
+- Deadhead Travel = Movement by air/surface to/from a Flight or Company-Directed Assignment.
+- Domicile = Company-designated Airport where Pilots are based (regardless of actual Residence).
+- Domicile Flex Line = Reserve Line with single block of 13+ consecutive Days Off; all Workdays are R-1 RAPs.
+- Duty = Any Company-directed activity: Flight, Deadhead, Training, R-1/R-2/R-4 Reserve, admin work, positioning.
+- Duty Assignment = Any requirement to be on Duty or Available (except R-3) counted toward Flight/Duty Time limits.
+- Duty Period = Continuous time from Report for Duty until Released from Duty and placed into Rest.
+- Duty Rig = Pay credit ratio 1:2 — one PCH per two hours of Duty, prorated minute-by-minute.
+- Eligible Dependent(s) = Spouse, children, domestic partner, or others qualifying for benefits/tax purposes per Agreement or law.
+- Eligible Pilot = A Pilot who possesses the qualifications to be awarded or Assigned to a Position or Assignment.
+- Extension = Involuntary Assignment to additional Flight/Duty after last segment of originally scheduled Trip Pairing, within legality and Section 14 limits.
+- FIFO = First In, First Out reserve scheduling per Section 15 for assigning Trips to Reserve Pilots.
+- Final Line/Final Bid Awards = Pilot's final awarded Line after Composite Line construction.
+- First Officer = Second-in-Command; assists/relieves Captain.
+- Flight Time = Brake release to block in (hours/minutes).
+- Furlough = Voluntary/involuntary removal from Active Service due to reduction in force.
+- Ghost Bid = Line a Full-Time Check Airman/Instructor bids for but cannot be awarded; establishes new MPG for the Month.
+- Grievance = Dispute for alleged Company violation(s) of this Agreement.
+- Initial Line Award = Pilot's Line award prior to Integration Period.
+- Junior Assignment (JA) = Involuntary Assignment to Duty on Day Off, inverse Seniority Order (most junior first).
+- Known Flying = All flight segments known before Monthly Initial Line Bid Period begins.
+- LOA = Letter of Agreement — addendum separate from main CBA body.
+- Monthly Bid Period = The bidding cycle each Month per Section 14.
+- Monthly Pay Guarantee (MPG) = Minimum PCH value for all published Initial/Final Lines.
+- MOU = Memorandum of Understanding.
+- Open Time = Trip Pairings/Reserve Assignments not built into Lines or that become available during the Month.
 - PCH = Pay Credit Hours — the unit of compensation.
-- R-1 = In-Domicile Short Call (Duty). R-2 = Out-of-Domicile Short Call (Duty). R-3 = Long Call. R-4 = Airport RAP (Duty).
-- Composite Line = Blank line constructed after SAP. Domicile Flex Line = Reserve with 13+ consecutive Days Off, all Workdays R-1.
-- Ghost Bid = Line a Check Airman bids but cannot be awarded; sets new MPG.
-- Phantom Award = Bidding higher-paying Position per seniority to receive that pay rate.
+- Phantom Award/Phantom Bid = Bidding for Vacancy in higher-paying Position (per seniority) to receive that higher pay rate.
+- Position = Captain or First Officer on a specific Aircraft Type at a Domicile.
+- RAP = Reserve Availability Period (R-1 or R-2 assignment).
+- Regular Line = Planned sequence of Trip Pairings (may include limited R-1 RAPs, max 6).
+- Reserve = Assignment (R-1/R-2/R-3/R-4) where Pilot is available for Company Assignment.
+- R-1 = In-Domicile Short Call Reserve (Duty). R-2 = Out-of-Domicile Short Call Reserve (Duty). R-3 = Long Call Reserve. R-4 = Airport RAP (Duty).
+- Rest Period = Minimum consecutive hours free from Duty between assignments — NOT a Day Off.
+- SAP = Schedule Adjustment Period — process to modify Initial Line Award via Pick-Up and Trade.
+- Seniority = Position on System Seniority List based on length of service from Date of Hire.
+- Split-Trip Pairing = Trip Pairing containing both Flight Segments and a RAP Assignment.
+- TDY = Temporary Duty Vacancy at location other than Pilot's Domicile.
+- Trip Pairing = One or more Duty Periods with any mix of Flight/Deadhead Segments, beginning and ending at Domicile.
+- Trip Rig = Pay credit based on elapsed trip time (as opposed to Duty Rig).
+- Vacancy = An open Position (Domicile/Aircraft Type/Status) to be filled per Section 18.
 
-CURRENT PAY RATES:
-DOS = July 24, 2018. Per Section 3.B.3, rates increase 2% annually on DOS anniversary. As of February 2026: 7 increases (July 2019–2025). CURRENT RATE = Appendix A DOS rate × 1.14869. Always use DOS column, multiply by 1.14869, show math. If longevity year is stated, look up that rate in Appendix A and calculate. Do NOT say you cannot find the rate if a year is provided.
+CURRENT PAY RATE GUIDANCE:
+The contract Date of Signing (DOS) is July 24, 2018. Per Section 3.B.3, Hourly Pay Rates increase by 2% annually on each anniversary of the DOS. As of February 2026, there have been 7 annual increases (July 2019 through July 2025). Therefore: CURRENT RATE = DOS rate from Appendix A × 1.02^7 (which equals × 1.14869). Always use the DOS column from Appendix A, multiply by 1.14869, and show your math. Example: Year 12 B737 Captain DOS rate 189.19 × 1.14869 = 217.33/hour.
+MANDATORY: If the Appendix A DOS rate appears in the provided contract sections, you MUST calculate and display the final dollar amount. If the pilot's longevity year is stated (e.g., "12 year captain"), look for that rate in Appendix A, apply the 1.14869 multiplier, and show the final pay. Do NOT say you cannot find the rate if a longevity year is provided — use the Appendix A data in the provided sections. If the specific rate truly does not appear in any provided section, use the example rate (189.19 for Year 12 B737 Captain) and note it as an example.
 
 PAY QUESTION RULES:
-When pay/compensation is involved:
-- Identify position and longevity year if provided
-- Calculate ALL four pay provisions and compare:
-  1. Block PCH: [flight time]
-  2. Duty Rig: [total duty hours] ÷ 2 = [X] PCH (if exact times unknown, show "Minimum Duty Rig estimate" using available info — NEVER say "cannot calculate")
+When the question involves pay or compensation, you MUST:
+- Identify the pilot's position (Captain or First Officer) and longevity year if provided
+- Calculate all potentially applicable pay provisions including:
+  * Daily Pay Guarantee (DPG): 3.82 PCH multiplied by hourly rate
+  * Duty Rig: total duty hours divided by 2, multiplied by hourly rate
+    DUTY RIG ESTIMATION RULE: If exact RAP start time or release time is not stated, you MUST still calculate a minimum Duty Rig estimate using what IS known. For assigned trips: duty begins at MINIMUM 1 hour before scheduled departure. For reserve pilots: duty begins at the RAP DOT if stated, or 1 hour before departure if RAP time is not given. Release time is after landing (use landing time as minimum). Show this as "Minimum Duty Rig estimate" and note what information would be needed for an exact calculation. NEVER say "cannot calculate" — always provide the minimum estimate.
+  * Trip Rig (TAFD): total TAFD hours divided by 4.9, multiplied by hourly rate
+  * Scheduled PCH if provided in the scenario
+  * Overtime Premium: PCH multiplied by hourly rate multiplied by 1.5 — BUT ONLY when trigger conditions are met (see OVERTIME PREMIUM RULES below)
+- Show all math step by step — PCH values AND dollar amounts for EVERY calculation
+- FORMATTING: Do NOT use dollar signs ($) in your response — Streamlit renders them as LaTeX. Instead write amounts as plain numbers like 191.22/hour or 1,147.32 total.
+- Quote the contract language that defines each calculation
+- State which calculation the contract says applies, or if the contract does not specify
+- ALWAYS end pay analysis with a clear summary: "The pilot should be paid [X] PCH × [rate] = [total]"
+
+MANDATORY PAY COMPARISON TABLE:
+Every pay answer MUST include a numbered comparison of ALL four calculations. Do NOT skip any. Use this exact format:
+  1. Block PCH: [X] PCH
+  2. Duty Rig: [total duty hours] ÷ 2 = [X] PCH (or "Minimum Duty Rig estimate: [X] PCH" if exact times are missing)
   3. DPG: 3.82 PCH
-  4. Trip Rig: [TAFD hours] ÷ 4.9 = [X] PCH (or "Not applicable — single-day duty period")
-  → Pilot receives the GREATER of these
-- Show all math: PCH values AND dollar amounts
-- Do NOT use dollar signs ($) — write "191.22/hour" not "$191.22/hour" (Streamlit renders $ as LaTeX)
-- End with: "The pilot should be paid [X] PCH × [rate] = [total]"
+  4. Trip Rig: [TAFD hours] ÷ 4.9 = [X] PCH (or "Not applicable — single-day duty period" if no overnight TAFD)
+  → The pilot receives the GREATER of these: [X] PCH ([name of winning calculation])
+If you skip Duty Rig or any other calculation, your answer is INCOMPLETE. Always show all four.
 
-DUTY RIG ESTIMATION: If exact times are missing, calculate minimum estimate from what IS known. For assigned trips: duty starts minimum 1 hour before departure. For reserve: duty starts at RAP DOT or 1 hour before departure (whichever earlier). Always provide estimate.
+OVERTIME PREMIUM RULES:
+Section 3.Q.1 provides 150% pay for duty on a scheduled Day Off, but ONLY under specific trigger conditions:
+  a. Circumstances beyond the Company's control (weather, mechanical, ATC, or customer accommodation); OR
+  b. An Assignment to remain with an aircraft that requires time-consuming repairs.
+CRITICAL: If the scenario does NOT state the cause of the Day Off duty, you MUST:
+  - Quote the Section 3.Q.1 trigger conditions verbatim
+  - State: "The overtime premium depends on WHY the pilot worked into his Day Off. If caused by circumstances beyond the Company's control (weather, mechanical, ATC, customer accommodation) or assignment to remain with an aircraft for repairs, 150% applies. If the trip was simply scheduled to end after midnight, the trigger conditions may not be met."
+  - Do NOT automatically apply 150% — present it as conditional on the cause
+  - This ambiguity about whether 150% applies MUST result in AMBIGUOUS status unless the scenario explicitly states the cause
 
-OVERTIME PREMIUM (Section 3.Q.1):
-150% pay for duty on scheduled Day Off applies ONLY when caused by: (a) circumstances beyond Company control (weather, mechanical, ATC, customer accommodation), OR (b) assignment to remain with aircraft for repairs.
-- If cause is NOT stated: quote trigger conditions, present 150% as CONDITIONAL, mark AMBIGUOUS
-- Do NOT automatically apply 150% without a stated trigger
-- OVERTIME SCOPE DISPUTE (REQUIRED ONLY when a single duty period begins on a workday and extends into a Day Off): "⚠️ OVERTIME SCOPE DISPUTE: Even if the 150% premium applies, the contract does not specify whether it covers all PCH earned in the duty period or only the PCH attributable to the Day Off hours. Both interpretations are reasonable, and this is a potential area of dispute."
-  Do NOT include this dispute paragraph when duty is entirely on a Day Off (e.g., Junior Assignment, full Day Off duty). The scope dispute only exists when there is a split between workday hours and Day Off hours within the same duty period.
+OVERTIME SCOPE RULE:
+Section 3.Q.1 states 150% applies to "the PCH earned when he is on Duty on a scheduled Day Off." When a single duty period spans both a workday and a Day Off, there are two reasonable interpretations:
+  a. 150% applies to ALL PCH for the entire duty period (because the pilot WAS on duty on a Day Off)
+  b. 150% applies only to the PCH attributable to the Day Off hours (because only that portion was "on Duty on a scheduled Day Off")
+You MUST acknowledge both interpretations and flag this as a point of ambiguity. Do NOT silently pick one interpretation.
+MANDATORY: Any time overtime premium is discussed AND the duty period spans both a workday and a Day Off, you MUST include this exact paragraph in your EXPLANATION section:
+"⚠️ OVERTIME SCOPE DISPUTE: Even if the 150% premium applies, the contract does not specify whether it covers all PCH earned in the duty period or only the PCH attributable to the Day Off hours. Both interpretations are reasonable, and this is a potential area of dispute."
+Do NOT omit this paragraph. It is REQUIRED whenever overtime and Day Off overlap occur together.
 
-RESERVE PAY:
-- R-1 and R-2 are DUTY — duty starts at scheduled RAP DOT, not when called or when flight departs
-- Use FULL duty period for Duty Rig: from RAP DOT or 1hr before departure (whichever earlier) to release
-- Per Section 3.F.1.b: Reserve Pilot receives GREATER of DPG or PCH from assigned trip
-- If duty extends past RAP or into Day Off, you MUST address: extension analysis, 0200 LDT rule (15.A.7-8), overtime premium eligibility, and whether single duty period = one Workday (Section 3.D.2)
+CRITICAL RESERVE PAY RULES:
+When calculating pay for a Reserve Pilot who is assigned a trip:
+- R-1 is DUTY (15.B.2.a). Duty time starts at the scheduled RAP DOT (Duty On Time), NOT when the flight departs or when the pilot was called. If an R-1 pilot has a RAP from noon to midnight and gets called at 3pm for a 6pm flight, his duty started at NOON.
+- R-2 is DUTY (15.B.3.b). Same principle — duty starts at RAP DOT.
+- For ANY scheduled trip, Duty begins 1 hour before the scheduled departure time. For reserve pilots, use whichever is EARLIER: the RAP DOT or 1 hour before flight departure.
+- For Duty Rig calculations, use the FULL duty period: from RAP DOT or 1 hour before departure (whichever is earlier) to actual release from duty (when the pilot is back and released, not when the flight lands).
+- If a reserve pilot works past the end of his scheduled RAP OR if a reserve pilot's duty (whether scheduled or actual) crosses into a scheduled Day Off, you MUST flag this and address ALL of the following:
+  * EXTENSION / DAY OFF DUTY: You MUST include the "⏰ EXTENSION / DAY OFF DUTY ANALYSIS:" subsection in your EXPLANATION (see RESPONSE FORMAT below). This applies whether the duty past the RAP or into the Day Off was scheduled in advance or resulted from delays.
+  * DAY OFF IMPACT: Check whether the next day is a scheduled Day Off. If so, cite the 0200 LDT rule (15.A.7-8) — assignments may be scheduled up to 0200 LDT into a Day Off. If the pilot works past 0200, this is a potential contract violation.
+  * OVERTIME PREMIUM: Apply the OVERTIME PREMIUM RULES above. Do NOT automatically award 150%. Check whether the scenario states a qualifying trigger condition (Section 3.Q.1). If the cause is not stated, present the premium as conditional and flag ambiguity.
+  * SECOND WORKDAY: Explicitly determine whether the work past midnight triggers a second Duty Period or Workday, which could mean additional DPG or other pay. You MUST address this directly — cite the overlapping-days provision (Section 3.D.2: a single Duty Period overlapping two Days constitutes one Workday) if applicable, and explicitly state your conclusion (e.g., "This is one continuous duty period, so it constitutes one Workday under Section 3.D.2"). Do NOT skip this step.
+  * Do NOT skip this analysis. Any time actual duty extends beyond the scheduled RAP end time, these provisions MUST be discussed.
+- Per Section 3.F.1.b, a Reserve Pilot receives the GREATER of: DPG, or the PCH earned from the assigned Trip Pairing (calculated per Section 3.E using block time, Duty Rig, or Trip Rig — whichever is greatest).
+- Always compare ALL applicable calculations (block PCH, Duty Rig, Trip Rig, DPG) and pay the GREATEST value.
 
-SCHEDULING/REST RULES:
-- Check across Section 13 (Hours of Service), Section 14 (Scheduling), Section 15 (Reserve)
-- Different line types have different rules — cite which line type each provision applies to
-- Distinguish "Day Off" (defined term) from "Rest Period" (defined term)
+SCHEDULING AND REST QUESTION RULES:
+When the question involves days off, rest periods, scheduling, or duty limits:
+- Check provisions across Section 13 (Hours of Service), Section 14 (Scheduling), and Section 15 (Reserve Duty)
+- Note that different line types (Regular, Composite, Reserve, TDY, Domicile Flex) have different rules
+- Cite the specific line type or duty status each provision applies to
+- Note minimum days off requirements for monthly line construction
+- Note rest period requirements between duty assignments
+- Distinguish between "Day Off" (defined term) and "Rest Period" (defined term)
 
 STATUS DETERMINATION:
-🔵 CLEAR = Contract explicitly and unambiguously answers; no conflicting provisions
-🔵 AMBIGUOUS = Multiple interpretations possible, conflicting provisions, missing scenario details needed to determine which rule applies, or premium trigger conditions not confirmed
-🔵 NOT ADDRESSED = Contract contains no relevant language
+After your analysis, assign one of these statuses:
+
+CLEAR - Use when:
+- The contract explicitly and unambiguously answers the question
+- All terms in the relevant provisions are defined
+- There are no conflicting provisions
+- The contract specifies exactly which calculation or rule applies
+
+AMBIGUOUS - Use when:
+- The contract uses undefined terms in the relevant provisions
+- Multiple provisions could apply and the contract does not specify which one
+- Provisions appear to conflict with each other
+- The contract language is open to more than one reasonable interpretation
+- The contract addresses the topic partially but not completely
+- The scenario is missing key details needed to determine which provision applies (e.g., the cause of Day Off work is not stated, so the 150% trigger cannot be confirmed; the pilot's line type is not stated, so different rules could apply)
+- A premium or benefit has trigger conditions and the scenario does not confirm whether those conditions are met
+
+NOT ADDRESSED - Use when:
+- The contract does not contain any language relevant to the question
+- The provided sections do not cover the topic asked about
 
 RESPONSE FORMAT:
-📄 CONTRACT LANGUAGE: [Exact quote] 📍 [Section, Page]
-(Repeat for each provision)
-📝 EXPLANATION: [Plain English analysis]
-  Include ⏰ EXTENSION / DAY OFF DUTY ANALYSIS when duty crosses past RAP or into Day Off
-  Include ⚠️ OVERTIME SCOPE DISPUTE only when duty starts on a workday and extends into a Day Off (not for pure Day Off duty like JA)
-🔵 STATUS: [CLEAR/AMBIGUOUS/NOT ADDRESSED] - [One sentence justification]
+Always structure your response exactly as follows:
+
+📄 CONTRACT LANGUAGE: [Quote exact contract text with quotation marks]
+📍 [Section number, Page number]
+
+(Repeat for each relevant provision found)
+
+📝 EXPLANATION: [Plain English explanation of what the contract language means, how provisions interact, and what the answer to the question is based solely on the contract text]
+
+MANDATORY SUBSECTIONS WITHIN EXPLANATION (include when applicable):
+
+⏰ EXTENSION / DAY OFF DUTY ANALYSIS: REQUIRED any time:
+  - A pilot's actual duty extends beyond the end of a scheduled RAP or duty period, OR
+  - A pilot's duty (whether scheduled or actual) crosses into a scheduled Day Off for ANY reason — including trips that were originally scheduled to end after midnight
+You MUST include this header and:
+(1) If duty extended beyond a scheduled RAP: State: "The pilot's scheduled RAP ended at [time] but the pilot was not released until [time]. This constitutes an extension of [X hour(s)] beyond the scheduled RAP."
+(2) If duty crosses into a Day Off (whether scheduled or due to extension): State: "The pilot's duty continued until [time] into his scheduled Day Off. Per Section 15.A.7, assignments may be scheduled up to 0200 LDT into a Day Off. [State whether the duty ended before or after 0200 LDT.]"
+(3) Quote the specific Section 14.N extension provisions from the provided contract sections in quotation marks with section/page citation. If 14.N language is not in the provided sections, state: "Section 14.N extension provisions should be reviewed but were not available in the retrieved contract sections."
+(4) If applicable, state whether the extension is the pilot's first that month (relevant to the one-extension-per-month limit). If this information is not provided in the scenario, note that it is unknown.
+
+⚠️ OVERTIME SCOPE DISPUTE: REQUIRED any time overtime premium is discussed AND the duty period spans both a workday and a Day Off. See OVERTIME SCOPE RULE above for required language.
+
+🔵 STATUS: [CLEAR/AMBIGUOUS/NOT ADDRESSED] - [One sentence justification for the status]
+
 ⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.
 
-Every claim must trace to a specific quoted provision. Do not speculate about "common practice" or reference external laws unless the contract itself references them."""
+IMPORTANT REMINDERS:
+- If you cannot find relevant language in the provided sections, say so clearly
+- Do not speculate about what the contract "probably" means or what "common practice" is
+- Do not reference external laws, FARs, or regulations unless the contract itself references them
+- Every claim you make must be traceable to a specific quoted provision
+- When provisions from multiple sections are relevant, cite all of them
+- Be thorough but concise - pilots need clear, actionable information"""
 
     messages = []
 
@@ -1990,7 +1741,7 @@ QUESTION: {question}
             {
                 "type": "text",
                 "text": system_prompt,
-                "cache_control": {"type": "ephemeral", "ttl": "1h"}
+                "cache_control": {"type": "ephemeral"}
             }
         ],
         messages=messages
@@ -2075,190 +1826,6 @@ DEFINITIONS_LOOKUP = {
     'vacancy': 'An open Position (Domicile/Aircraft Type/Status) to be filled per Section 18.',
 }
 
-# Fixed-value contract rules for instant lookup (no API call)
-TIER1_RULES = {
-    'grievance_deadline': {
-        'keywords': ['grievance deadline', 'grievance time limit', 'how long to file a grievance',
-                     'how long do i have to file', 'how long to grieve', 'grievance filing deadline',
-                     'time to file grievance', 'when to file grievance', 'deadline to grieve',
-                     'days to file grievance', 'days to grieve'],
-        'answer': """📄 CONTRACT LANGUAGE: "A Pilot or Union Representative must first attempt to resolve the dispute informally with the Chief Pilot, or designee, via phone conversation, personal meeting, or e-mail within thirty (30) Days after the Pilot became aware, or reasonably should have become aware, of the event giving rise to the Grievance."
-📍 Section 19.C.1, Page 220
-
-"If the dispute is not resolved during the informal discussion, the Pilot or Union may file a written Grievance within twenty (20) Business Days after the informal discussion."
-📍 Section 19.C.2, Page 220
-
-"Failure to file or advance any Grievance within the time periods prescribed in this Section shall result in the waiver and abandonment of the Grievance."
-📍 Section 19.D.2, Page 222
-
-📝 EXPLANATION: The contract establishes a two-step filing process:
-- Step 1: Attempt informal resolution within 30 Days of becoming aware of the event (Section 19.C.1)
-- Step 2: If unresolved, file a written Grievance within 20 Business Days after the informal discussion (Section 19.C.2)
-- Missing either deadline results in waiver and abandonment of the Grievance (Section 19.D.2)
-
-Full timeline: 30 Days (informal) → 20 Business Days (written filing) → 10 Business Days (meeting) → 10 Business Days (Company decision) → 20 Business Days (appeal to System Board)
-
-🔵 STATUS: CLEAR - The contract explicitly states these deadlines in Sections 19.C and 19.D.
-
-
-⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.""",
-    },
-
-    'minimum_days_off': {
-        'keywords': ['minimum days off', 'how many days off', 'days off per month',
-                     'min days off', 'days off minimum', 'monthly days off',
-                     'how many days off per month', 'days off in a month'],
-        'answer': """📄 CONTRACT LANGUAGE: "The minimum scheduled Days Off in all constructed Initial Lines shall be thirteen (13) in a thirty (30) Day Month and fourteen (14) in a thirty-one (31) Day Month."
-📍 Section 14.E.2.d (LOA #15), Page 328
-
-"All Regular, Composite, Reserve, and Domicile Flex Lines shall have either two (2) separate periods of at least three (3) consecutive Days Off, or one single block of at least five (5) consecutive Days Off."
-📍 Section 14.E.2.b (LOA #15), Page 328
-
-📝 EXPLANATION: Per the contract, the minimum Days Off per month are:
-- 30-day month: 13 Days Off minimum
-- 31-day month: 14 Days Off minimum
-
-These minimums apply to all line types (Regular, Composite, Reserve, Domicile Flex). Additionally, Days Off must be structured as either two blocks of 3+ consecutive Days Off, or one block of 5+ consecutive Days Off.
-
-Exception: TDY Lines have reduced minimums — 12 Days Off (30-day month) or 13 Days Off (31-day month) per Section 14.E.3.d.
-
-🔵 STATUS: CLEAR - The contract explicitly states minimum Days Off in Section 14.E.2.d (LOA #15).
-
-
-⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.""",
-    },
-
-    'dpg_value': {
-        'keywords': ['what is the dpg', 'what is dpg', 'dpg value', 'dpg amount',
-                     'how much is dpg', 'daily pay guarantee amount', 'daily pay guarantee value',
-                     'what is the daily pay guarantee', 'dpg pch', 'dpg hours'],
-        'answer': """📄 CONTRACT LANGUAGE: "Daily Pay Guarantee (DPG): Three and eighty-two hundredths hours (3.82) PCH."
-📍 Section 2 (Definitions), Page 21
-
-"A Pilot who is scheduled for Reserve or performs an Assignment while on Reserve shall be paid the greater of: (a) the applicable Daily Pay Guarantee; or (b) the PCH earned from the assigned Trip Pairing."
-📍 Section 3.F.1.b, Page 53
-
-📝 EXPLANATION: The Daily Pay Guarantee (DPG) is 3.82 PCH per day of scheduled Duty or Company-Directed Assignment. This is the minimum a pilot receives for any workday, regardless of actual block time. The pilot always receives the GREATER of DPG, block time, Duty Rig, or Trip Rig.
-
-To calculate the dollar value: 3.82 PCH x your current hourly rate. For example, a Year 12 B737 Captain (217.33/hour): 3.82 x 217.33 = 830.20 per day minimum.
-
-🔵 STATUS: CLEAR - The contract explicitly defines DPG as 3.82 PCH in Section 2.
-
-
-⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.""",
-    },
-
-    'rest_minimums': {
-        'keywords': ['minimum rest', 'rest requirement', 'how much rest', 'rest between',
-                     'rest minimum', 'min rest', 'hours of rest', 'rest after duty',
-                     'rest period requirement', 'required rest'],
-        'answer': """📄 CONTRACT LANGUAGE: "A Pilot shall be given a minimum Rest Period of ten (10) consecutive hours after completing a Duty Period of fourteen (14) hours or less."
-📍 Section 13.G.1, Page 155
-
-"A Pilot shall be given a minimum Rest Period of twelve (12) consecutive hours after completing a Duty Period of more than fourteen (14) hours."
-📍 Section 13.G.1, Page 155
-
-"If a Pilot's Rest is interrupted, the required Rest Period begins anew."
-📍 Section 13.H.7, Page 156
-
-📝 EXPLANATION: Per the contract, minimum rest requirements are:
-- After duty of 14 hours or less: 10 hours minimum rest
-- After duty of more than 14 hours: 12 hours minimum rest
-
-Important: If rest is interrupted (phone calls, hotel disturbances, etc.), the full rest period starts over from the beginning per Section 13.H.7. Only emergency or security notifications are exempt.
-
-Note: A Rest Period is NOT the same as a Day Off. A Day Off is a full calendar day (00:00-23:59) free from all Duty at Domicile.
-
-🔵 STATUS: CLEAR - The contract explicitly states rest minimums in Section 13.G.1.
-
-
-⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.""",
-    },
-
-    'duty_time_limits': {
-        'keywords': ['duty time limit', 'maximum duty', 'max duty', 'duty limit',
-                     'how long can i be on duty', 'duty hour limit', 'max duty hours',
-                     'maximum duty time', 'duty time max', 'how many hours of duty',
-                     'duty hours limit', 'longest duty day'],
-        'answer': """📄 CONTRACT LANGUAGE: "No Pilot shall be scheduled for or required to exceed the following maximum Duty Time limitations..."
-📍 Section 13.F.1, Page 154
-
-📝 EXPLANATION: Per the contract, maximum duty time depends on crew complement:
-- Basic crew (2 pilots): 16 hours maximum
-- Augmented crew (3 pilots): 18 hours maximum
-- Heavy crew (4 pilots): 20 hours maximum
-
-Per Section 14.N, if duty is projected to exceed these limits, the Company must remove the pilot from the trip and place them into rest. A pilot may not be extended beyond these limits.
-
-Per Section 13.F, these are hard limits — not targets. Scheduled duty should be planned well within these maximums.
-
-🔵 STATUS: CLEAR - The contract explicitly states duty time limits in Section 13.F.1.
-
-
-⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.""",
-    },
-
-    'ja_limits': {
-        'keywords': ['ja limit', 'junior assignment limit', 'how many ja', 'how many junior assignment',
-                     'ja per month', 'ja in 3 months', 'ja rolling', 'max ja',
-                     'maximum junior assignment', 'ja frequency', 'how often can i be ja'],
-        'answer': """📄 CONTRACT LANGUAGE: "Under no circumstances shall the Company involuntary assign a Pilot to a JA for more than two (2) independent involuntary assignments in any rolling three (3) Month period."
-📍 Section 14.O, Page 188
-
-"A Pilot shall not be subject to a JA without his consent when he is on Vacation."
-📍 Section 14.O, Page 188
-
-"No Pilot may be involuntary assigned into a JA prior to forty-eight (48) hours before the scheduled departure time."
-📍 Section 14.O, Page 188
-
-📝 EXPLANATION: Per the contract, Junior Assignment limits are:
-- Maximum 2 involuntary JAs in any rolling 3-month period
-- Cannot be junior assigned while on Vacation
-- Cannot be junior assigned more than 48 hours before departure
-- JA must follow inverse seniority order (most junior pilot first)
-- JA Premium: 200% for 1st JA in rolling 3 months, 250% for 2nd JA (Section 3.R)
-- R-1, R-3, and R-4 pilots are NOT eligible for JA (Section 14.O.14)
-- R-2 pilots are eligible for JA at international locations ONLY (Section 14.O.14)
-
-🔵 STATUS: CLEAR - The contract explicitly states JA limits in Section 14.O.
-
-
-⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.""",
-    },
-
-    'extension_limits': {
-        'keywords': ['extension limit', 'how many extensions', 'extension per month',
-                     'max extensions', 'maximum extensions', 'extensions per month',
-                     'how often can i be extended', 'extension frequency', 'extension rules'],
-        'answer': """📄 CONTRACT LANGUAGE: "A Pilot shall not be extended more than one (1) time per Month."
-📍 Section 14.N.6, Page 186
-
-"An Extension shall not cause a Pilot to exceed the applicable Duty Time limitations of Section 13."
-📍 Section 14.N, Page 185
-
-📝 EXPLANATION: Per the contract, Extension limits are:
-- Maximum 1 involuntary extension per calendar month (Section 14.N.6)
-- Extensions cannot exceed duty time limits (16hr/18hr/20hr per Section 13.F)
-- Extensions cannot cause a pilot to miss a scheduled Day Off beyond 0200 LDT (Section 15.A.7)
-- An Extension is defined as an involuntary assignment to additional duty after the last segment of a pilot's originally scheduled Trip Pairing
-
-If you have been extended more than once in a month, this is a potential contract violation.
-
-🔵 STATUS: CLEAR - The contract explicitly states the one-extension-per-month limit in Section 14.N.6.
-
-
-⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.""",
-    },
-}
-
-def _match_tier1_rule(question_lower):
-    """Check if a question matches a Tier 1 fixed-value rule.
-    Returns the rule key or None."""
-    for rule_key, rule in TIER1_RULES.items():
-        if any(kw in question_lower for kw in rule['keywords']):
-            return rule_key
-    return None
-
 def _parse_pay_question(question_lower):
     """Parse a pay rate question and return (aircraft, position, year) or None."""
     # Extract year
@@ -2314,6 +1881,7 @@ def _format_pay_answer(aircraft, position, year):
 
 🔵 STATUS: CLEAR - The contract explicitly provides the DOS pay rates in Appendix A and the annual increase formula in Section 3.B.3.
 
+⚡ Instant answer from pre-computed pay table (no API cost)
 
 ⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes."""
 
@@ -2329,6 +1897,7 @@ def _format_definition_answer(term, definition):
 
 🔵 STATUS: CLEAR - The contract explicitly defines this term in Section 2.
 
+⚡ Instant answer from contract definitions (no API cost)
 
 ⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes."""
 
@@ -2341,33 +1910,13 @@ def tier1_instant_answer(question_lower):
     """
     start = time.time()
 
-    # --- TIER 1 RULE LOOKUPS (check BEFORE scenario detection) ---
-    # These are "what is the rule?" questions that match keywords also
-    # found in scenarios, so they must be checked first.
-    # Only triggers on clean rule-lookup phrasing, not scenario context.
-    rule_key = _match_tier1_rule(question_lower)
-    if rule_key:
-        # Extra guard: if the question contains specific numeric scenario details,
-        # fall through to the API instead (e.g., "I had 8 hours rest after 16 hour duty")
-        has_numeric_scenario = re.search(r'\d+(?:\.\d+)?\s*hours?\s*(?:of\s+)?(?:duty|rest|block|on duty)', question_lower)
-        if not has_numeric_scenario:
-            answer = TIER1_RULES[rule_key]['answer']
-            return answer, 'CLEAR', round(time.time() - start, 1)
-
     # --- SCENARIO DETECTION: If question has duty/block/TAFD numbers, skip Tier 1 ---
     # These need the full API with pre-computed pay calculator
     scenario_indicators = ['duty', 'block', 'tafd', 'flew', 'flying', 'flight time',
                            'time away', 'junior assign', 'ja ', 'open time pick',
                            'extension', 'reassign', 'day off', 'overtime',
-                           'hour duty', 'hour block', 'hours of duty', 'hours of block',
-                           'landed', 'released', 'departed', 'called at', 'got called',
-                           'departure', 'what do i get paid', 'what would i get paid',
-                           'what should i get paid', 'what am i owed',
-                           'rap was', 'rap from', 'my rap', 'on reserve']
+                           'hour duty', 'hour block', 'hours of duty', 'hours of block']
     has_scenario = any(s in question_lower for s in scenario_indicators)
-    # Also catch time references: "3pm", "noon", "midnight", "0600", etc.
-    if not has_scenario:
-        has_scenario = bool(re.search(r'\d{1,2}\s*(?:am|pm|a\.m\.|p\.m\.)|noon|midnight|\d{4}\s*(?:ldt|local|zulu)', question_lower))
     if has_scenario:
         return None
 
@@ -2419,105 +1968,10 @@ def tier1_instant_answer(question_lower):
     return None
 
 # ============================================================
-# QUESTION PREPROCESSOR
-# Normalizes pilot shorthand, abbreviations, and slang before
-# the question hits Tier 1, BM25, embeddings, and the API.
-# ============================================================
-
-# Order matters: longer patterns first to avoid partial replacements
-_SHORTHAND_MAP = [
-    # Contractions and informal
-    (r"\bwhats\b", "what is"),
-    (r"\bwhat's\b", "what is"),
-    (r"\bhow's\b", "how is"),
-    (r"\bcan't\b", "cannot"),
-    (r"\bdon't\b", "do not"),
-    (r"\bdoesn't\b", "does not"),
-    (r"\bwon't\b", "will not"),
-    (r"\bdidn't\b", "did not"),
-    (r"\bwasn't\b", "was not"),
-    (r"\bi'm\b", "i am"),
-    (r"\bi've\b", "i have"),
-    (r"\bi'd\b", "i would"),
-    # Pilot shorthand — positions
-    (r"\bca\b", "captain"),
-    (r"\bcapt\b", "captain"),
-    (r"\bfo\b", "first officer"),
-    (r"\bf/o\b", "first officer"),
-    (r"\bpic\b", "pilot in command"),
-    (r"\bsic\b", "second in command"),
-    # Reserve types
-    (r"\br1\b", "r-1"),
-    (r"\br2\b", "r-2"),
-    (r"\br3\b", "r-3"),
-    (r"\br4\b", "r-4"),
-    # Pilot shorthand — operations
-    (r"\bja'd\b", "junior assigned"),
-    (r"\bja'ed\b", "junior assigned"),
-    (r"\bjaed\b", "junior assigned"),
-    (r"\bja\b", "junior assignment"),
-    (r"\bext'd\b", "extended"),
-    (r"\bexted\b", "extended"),
-    (r"\bdeadhd\b", "deadhead"),
-    (r"\bdh\b", "deadhead"),
-    (r"\bd/h\b", "deadhead"),
-    (r"\bmx\b", "mechanical"),
-    (r"\bmech\b", "mechanical"),
-    (r"\bpax\b", "passenger"),
-    (r"\bsked\b", "schedule"),
-    (r"\bskd\b", "schedule"),
-    (r"\bdom\b", "domicile"),
-    (r"\bvac\b", "vacation"),
-    (r"\bprobat\b", "probation"),
-    (r"\bgriev\b", "grievance"),
-    # Time/pay shorthand
-    (r"\byr\b", "year"),
-    (r"\byrs\b", "years"),
-    (r"\bhr\b", "hour"),
-    (r"\bhrs\b", "hours"),
-    (r"\bmin\b(?!imum)", "minutes"),
-    (r"\bmos?\b", "months"),
-    (r"\bOT\b", "overtime"),
-    (r"\bot\b", "overtime"),
-    # Contract references
-    (r"\bsect\b", "section"),
-    (r"\bsec\b", "section"),
-    (r"\bart\b", "article"),
-    (r"\bloa\b", "loa"),
-    (r"\bmou\b", "mou"),
-    (r"\bjcba\b", "contract"),
-    (r"\bcba\b", "contract"),
-    # Aircraft
-    (r"\b73\b", "b737"),
-    (r"\b737\b", "b737"),
-    (r"\b76\b", "b767"),
-    (r"\b767\b", "b767"),
-    # Common misspellings
-    (r"\bscheudle\b", "schedule"),
-    (r"\bschedual\b", "schedule"),
-    (r"\bgrievence\b", "grievance"),
-    (r"\bgreivance\b", "grievance"),
-    (r"\bassigment\b", "assignment"),
-    (r"\breassigment\b", "reassignment"),
-]
-
-# Pre-compile patterns for performance
-_SHORTHAND_COMPILED = [(re.compile(pattern, re.IGNORECASE), replacement) for pattern, replacement in _SHORTHAND_MAP]
-
-def preprocess_question(question_text):
-    """Normalize pilot shorthand and abbreviations for better matching."""
-    result = question_text
-    for pattern, replacement in _SHORTHAND_COMPILED:
-        result = pattern.sub(replacement, result)
-    # Collapse multiple spaces
-    result = re.sub(r'  +', ' ', result).strip()
-    return result
-
-# ============================================================
 # MAIN ENTRY
 # ============================================================
 def ask_question(question, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name, conversation_history=None):
-    normalized = preprocess_question(question.strip()).lower()
+    normalized = question.strip().lower()
 
     # Tier 1: Instant answers — no API cost, no embedding cost
     tier1_result = tier1_instant_answer(normalized)
@@ -2530,6 +1984,9 @@ def ask_question(question, chunks, embeddings, openai_client, anthropic_client, 
     cached_result = semantic_cache.lookup(question_embedding, contract_id)
     if cached_result is not None:
         cached_answer, cached_status, cached_time = cached_result
+        # Add cache hit badge if not already present
+        if '⚡ Cached answer' not in cached_answer:
+            cached_answer += "\n\n⚡ Cached answer (no API cost)"
         return cached_answer, cached_status, 0.0
 
     answer, status, response_time = _ask_question_api(
@@ -2542,34 +1999,6 @@ def ask_question(question, chunks, embeddings, openai_client, anthropic_client, 
     return answer, status, response_time
 
 # ============================================================
-# ANALYTICS DASHBOARD
-# ============================================================
-def _load_top_questions():
-    """Load top 5 most asked questions via logger (Turso or local fallback)."""
-    try:
-        logger = init_logger()
-        contract_id = st.session_state.get('selected_contract')
-        return logger.get_top_questions(5, contract_id=contract_id)
-    except:
-        return []
-
-def render_analytics_dashboard():
-    """Render simple public analytics — just top questions."""
-    st.markdown("## 🔥 Most Asked Questions")
-    st.caption("See what other pilots are asking about")
-    
-    top = _load_top_questions()
-    
-    if top:
-        for i, (q_text, count) in enumerate(top, 1):
-            label = f"**{i}.** {q_text}"
-            if count > 1:
-                label += f"  ·  *asked {count} times*"
-            st.markdown(label)
-    else:
-        st.caption("No questions logged yet. Be the first to ask!")
-
-# ============================================================
 # SESSION STATE
 # ============================================================
 if 'authenticated' not in st.session_state:
@@ -2580,8 +2009,6 @@ if 'selected_contract' not in st.session_state:
     st.session_state.selected_contract = None
 if 'show_reference' not in st.session_state:
     st.session_state.show_reference = None
-if 'show_analytics' not in st.session_state:
-    st.session_state.show_analytics = False
 if 'ratings' not in st.session_state:
     st.session_state.ratings = {}
 
@@ -2590,7 +2017,7 @@ if 'ratings' not in st.session_state:
 # ============================================================
 if not st.session_state.authenticated:
     st.title("✈️ AskTheContract - Beta Access")
-    st.write("**Contract Language Search Engine for Pilots**")
+    st.write("**AI-Powered Contract Q&A for Pilots**")
 
     with st.form("login_form"):
         password = st.text_input("Enter beta password:", type="password")
@@ -2612,8 +2039,7 @@ if not st.session_state.authenticated:
 # ============================================================
 else:
     st.title("✈️ AskTheContract")
-    st.markdown("**Search and retrieve exact contract language with page and section references.**")
-    st.caption("Provides a plain-language summary of the relevant contract text and highlights whether the language appears clear or ambiguous.")
+    st.caption("AI-Powered Contract Q&A System")
 
     # ---- SIDEBAR ----
     with st.sidebar:
@@ -2651,17 +2077,12 @@ else:
 
         # FEATURE 1: Quick Reference Cards
         st.subheader("📖 Quick Reference")
-
+        st.caption("Zero AI — loads instantly")
         for card_name, card_data in QUICK_REFERENCE_CARDS.items():
             if st.button(f"{card_data['icon']} {card_name}", key=f"ref_{card_name}", use_container_width=True):
                 st.session_state.show_reference = card_name
-                st.session_state.show_analytics = False
 
         st.write("---")
-        if st.button("🔥 Most Asked Questions", use_container_width=True):
-            st.session_state.show_analytics = not st.session_state.show_analytics
-            st.session_state.show_reference = None
-            st.rerun()
         if st.button("🗑️ Clear Conversation", use_container_width=True):
             st.session_state.conversation = []
             st.session_state.show_reference = None
@@ -2671,7 +2092,7 @@ else:
             st.rerun()
 
     # ---- MAIN CONTENT ----
-    st.info(f"Limited to the {airline_name} Pilot Contract (JCBA). Does not reference FAA regulations, company manuals, or other policies.")
+    st.info(f"📋 This tool searches **only** the **{airline_name} Pilot Contract (JCBA)**. It does not cover FAA regulations (FARs), Company Operations Manuals, or other policies.")
 
     # Show Quick Reference Card if selected
     if st.session_state.show_reference:
@@ -2679,14 +2100,6 @@ else:
         st.markdown(card['content'])
         if st.button("✖ Close Reference Card"):
             st.session_state.show_reference = None
-            st.rerun()
-        st.write("---")
-
-    # Show Analytics Dashboard if selected
-    if st.session_state.show_analytics:
-        render_analytics_dashboard()
-        if st.button("✖ Close"):
-            st.session_state.show_analytics = False
             st.rerun()
         st.write("---")
 
@@ -2721,8 +2134,7 @@ else:
                 answer_text=answer,
                 status=status,
                 contract_id=st.session_state.selected_contract,
-                response_time=response_time,
-                category=category
+                response_time=response_time
             )
 
             st.session_state.conversation.append({
@@ -2761,11 +2173,11 @@ else:
             rating_key = f"rating_{q_num}"
             with col1:
                 if st.button("👍", key=f"up_{q_num}"):
-                    log_rating(qa['question'], "up", st.session_state.selected_contract)
+                    log_rating(qa['question'], "up")
                     st.session_state.ratings[rating_key] = "up"
             with col2:
                 if st.button("👎", key=f"down_{q_num}"):
-                    log_rating(qa['question'], "down", st.session_state.selected_contract)
+                    log_rating(qa['question'], "down")
                     st.session_state.ratings[rating_key] = "down"
             with col3:
                 if rating_key in st.session_state.ratings:
@@ -2790,3 +2202,4 @@ This is not legal advice."""
             st.write("---")
 
     # ---- FOOTER ----
+    st.caption("⚠️ **Disclaimer:** This tool searches only the pilot union contract (JCBA). It does not cover FAA regulations, company manuals, or other policies. This is not legal advice. Consult your union representative.")
