@@ -199,7 +199,7 @@ class ContractLogger:
                         {"type": "text", "value": answer_text},
                         {"type": "text", "value": status or ""},
                         {"type": "text", "value": category or "General Contract Question"},
-                        {"type": "float", "value": str(response_time or 0)}
+                        {"type": "float", "value": response_time or 0}
                     ]
                 }])
             except Exception as e:
