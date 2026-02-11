@@ -275,11 +275,31 @@ class ContractLogger:
 
         if self._turso_available:
             try:
-                rows = self._turso_query_rows(sql, turso_args)
-                if rows:
-                    return rows
-            except:
-                pass
+                stmt = {"sql": sql}
+                if turso_args:
+                    stmt["args"] = turso_args
+                raw = self._turso_request([stmt])
+                print(f"[TopQ-debug] raw: {str(raw)[:500]}")
+                if raw and 'results' in raw:
+                    select_result = raw['results'][0]
+                    if select_result.get('type') == 'ok':
+                        raw_rows = select_result['response']['result'].get('rows', [])
+                        print(f"[TopQ-debug] raw_rows count: {len(raw_rows)}")
+                        parsed = []
+                        for row in raw_rows:
+                            parsed.append(tuple(
+                                None if col['type'] == 'null' else
+                                int(col['value']) if col['type'] == 'integer' else
+                                float(col['value']) if col['type'] == 'float' else
+                                col['value']
+                                for col in row
+                            ))
+                        if parsed:
+                            return parsed
+                    else:
+                        print(f"[TopQ-debug] select not ok: {select_result}")
+            except Exception as e:
+                print(f"[TopQ-debug] exception: {e}")
         return self._local_query(sql, local_params)
 
     # ================================================================
