@@ -2549,12 +2549,8 @@ def _load_top_questions():
     try:
         logger = init_logger()
         contract_id = st.session_state.get('selected_contract')
-        print(f"[TopQ] contract_id={contract_id}, turso={logger._turso_available}")
-        result = logger.get_top_questions(5, contract_id=contract_id)
-        print(f"[TopQ] result={result}")
-        return result
-    except Exception as e:
-        print(f"[TopQ] Error loading top questions: {e}")
+        return logger.get_top_questions(5, contract_id=contract_id)
+    except:
         return []
 
 def render_analytics_dashboard():
