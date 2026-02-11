@@ -17,11 +17,7 @@ import math
 sys.path.append(str(Path(__file__).parent))
 
 from contract_manager import ContractManager
-try:
-    from contract_logger import ContractLogger
-except ImportError:
-    class ContractLogger:
-        def log_question(self, *args, **kwargs): pass
+from contract_logger import ContractLogger
 
 # Page config
 st.set_page_config(
