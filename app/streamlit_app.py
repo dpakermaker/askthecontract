@@ -331,7 +331,7 @@ A 3-day trip with 12 hours block, 28 hours duty, 38 hours TAFD:
 | Junior Assignment (2nd in 3 months) | 250% | 3.R.2 |
 | Check Airman Day Off admin | 175% | 3.S.5.b |
 
-**Current Hourly Rate = DOS Rate × 1.14869** (7 annual 2% increases since July 2018)
+**Current Hourly Rate = DOS Rate × 1.02^(years since July 2018)** — rates increase 2% annually per Section 3.B.3
 
 ⚠️ Always verify your pay stub matches the highest of the four calculations."""
     },
@@ -687,211 +687,16 @@ def log_rating(question_text, rating, contract_id, comment=""):
         logger = init_logger()
         logger.log_rating(question_text, rating, contract_id, comment)
         return True
-    except:
+    except Exception:
         return False
 
 # ============================================================
 # SEMANTIC SIMILARITY CACHE
 # ============================================================
-class SemanticCache:
-    """Turso-backed persistent cache with in-memory similarity search.
-    
-    Uses Turso HTTP API — no extra packages needed.
-    On startup: loads all cached Q&A from Turso into memory.
-    On new answer: writes to both memory AND Turso.
-    On restart/deploy: memory reloads from Turso — nothing lost.
-    Falls back to memory-only if Turso is unavailable.
-    """
-    SIMILARITY_THRESHOLD = 0.93
-    MAX_ENTRIES = 2000
-
-    def __init__(self):
-        self._lock = threading.Lock()
-        self._entries = {}
-        self._turso_available = False
-        turso_url = os.environ.get('TURSO_DATABASE_URL', '')
-        self._turso_token = os.environ.get('TURSO_AUTH_TOKEN', '')
-        # Convert libsql:// URL to https:// for HTTP API
-        if turso_url and self._turso_token:
-            self._http_url = turso_url.replace('libsql://', 'https://') + '/v3/pipeline'
-            self._init_turso()
-        else:
-            self._http_url = ''
-            print("[Cache] No Turso credentials — memory-only mode")
-
-    def _turso_request(self, statements):
-        """Send SQL statements to Turso via HTTP API."""
-        import urllib.request
-        import base64 as b64module
-        requests_body = []
-        for stmt in statements:
-            if isinstance(stmt, str):
-                requests_body.append({"type": "execute", "stmt": {"sql": stmt}})
-            elif isinstance(stmt, dict):
-                requests_body.append({"type": "execute", "stmt": stmt})
-        requests_body.append({"type": "close"})
-        
-        data = json.dumps({"requests": requests_body}).encode('utf-8')
-        req = urllib.request.Request(
-            self._http_url,
-            data=data,
-            headers={
-                'Content-Type': 'application/json',
-                'Authorization': f'Bearer {self._turso_token}'
-            }
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                return json.loads(resp.read().decode('utf-8'))
-        except urllib.request.HTTPError as e:
-            error_body = e.read().decode('utf-8') if e.fp else 'no body'
-            print(f"[Cache] Turso HTTP {e.code}: {error_body[:200]}")
-            return None
-        except Exception as e:
-            print(f"[Cache] Turso error: {e}")
-            return None
-
-    def _init_turso(self):
-        """Initialize Turso table via HTTP API."""
-        try:
-            result = self._turso_request([
-                """CREATE TABLE IF NOT EXISTS answer_cache (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    contract_id TEXT NOT NULL,
-                    question TEXT NOT NULL,
-                    answer TEXT NOT NULL,
-                    status TEXT,
-                    response_time REAL,
-                    embedding_b64 TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )""",
-                "CREATE INDEX IF NOT EXISTS idx_cache_contract ON answer_cache(contract_id)"
-            ])
-            if result:
-                self._turso_available = True
-                self._load_from_turso()
-                total = sum(len(v) for v in self._entries.values())
-                print(f"[Cache] ✅ Turso connected — loaded {total} cached answers")
-            else:
-                print("[Cache] Turso init failed — memory-only mode")
-        except Exception as e:
-            print(f"[Cache] Turso init error: {e} — memory-only mode")
-
-    def _load_from_turso(self):
-        """Load all cached entries from Turso into memory."""
-        if not self._turso_available:
-            return
-        import base64 as b64module
-        try:
-            result = self._turso_request([
-                "SELECT contract_id, question, answer, status, response_time, embedding_b64 FROM answer_cache ORDER BY created_at DESC"
-            ])
-            if not result or 'results' not in result:
-                return
-            # Parse response — results[0] is our SELECT
-            select_result = result['results'][0]
-            if select_result.get('type') != 'ok':
-                return
-            rows = select_result['response']['result'].get('rows', [])
-            for row in rows:
-                contract_id = row[0]['value']
-                question = row[1]['value']
-                answer = row[2]['value']
-                status = row[3]['value'] if row[3]['type'] != 'null' else ''
-                response_time = float(row[4]['value']) if row[4]['type'] != 'null' else 0.0
-                emb_b64 = row[5]['value']
-                embedding = np.frombuffer(b64module.b64decode(emb_b64), dtype=np.float32)
-                if contract_id not in self._entries:
-                    self._entries[contract_id] = []
-                if len(self._entries[contract_id]) < self.MAX_ENTRIES:
-                    self._entries[contract_id].append((embedding, question, answer, status, response_time))
-        except Exception as e:
-            print(f"[Cache] Failed to load from Turso: {e}")
-
-    def _save_to_turso(self, embedding, question, answer, status, response_time, contract_id):
-        """Persist a new cache entry to Turso via HTTP API."""
-        if not self._turso_available:
-            return
-        import base64 as b64module
-        try:
-            emb_b64 = b64module.b64encode(np.array(embedding, dtype=np.float32).tobytes()).decode('ascii')
-            stmt = {
-                "sql": "INSERT INTO answer_cache (contract_id, question, answer, status, response_time, embedding_b64) VALUES (?, ?, ?, ?, ?, ?)",
-                "args": [
-                    {"type": "text", "value": contract_id},
-                    {"type": "text", "value": question},
-                    {"type": "text", "value": answer},
-                    {"type": "text", "value": status or ""},
-                    {"type": "float", "value": response_time},
-                    {"type": "text", "value": emb_b64}
-                ]
-            }
-            self._turso_request([stmt])
-        except Exception as e:
-            print(f"[Cache] Failed to save to Turso: {e}")
-
-    def lookup(self, embedding, contract_id):
-        embedding = np.array(embedding, dtype=np.float32)
-        with self._lock:
-            entries = self._entries.get(contract_id, [])
-            best_score = 0
-            best_result = None
-            for cached_emb, cached_q, cached_answer, cached_status, cached_time in entries:
-                score = np.dot(embedding, cached_emb) / (
-                    np.linalg.norm(embedding) * np.linalg.norm(cached_emb)
-                )
-                if score > self.SIMILARITY_THRESHOLD and score > best_score:
-                    best_score = score
-                    best_result = (cached_answer, cached_status, cached_time)
-            return best_result
-
-    def store(self, embedding, question, answer, status, response_time, contract_id):
-        embedding = np.array(embedding, dtype=np.float32)
-        with self._lock:
-            if contract_id not in self._entries:
-                self._entries[contract_id] = []
-            entries = self._entries[contract_id]
-            for cached_emb, _, _, _, _ in entries:
-                score = np.dot(embedding, cached_emb) / (
-                    np.linalg.norm(embedding) * np.linalg.norm(cached_emb)
-                )
-                if score > self.SIMILARITY_THRESHOLD:
-                    return
-            if len(entries) >= self.MAX_ENTRIES:
-                entries.pop(0)
-            entries.append((embedding, question, answer, status, response_time))
-        self._save_to_turso(embedding, question, answer, status, response_time, contract_id)
-
-    def clear(self, contract_id=None):
-        with self._lock:
-            if contract_id:
-                self._entries.pop(contract_id, None)
-            else:
-                self._entries = {}
-        if self._turso_available:
-            try:
-                if contract_id:
-                    stmt = {
-                        "sql": "DELETE FROM answer_cache WHERE contract_id = ?",
-                        "args": [{"type": "text", "value": contract_id}]
-                    }
-                else:
-                    stmt = "DELETE FROM answer_cache"
-                self._turso_request([stmt])
-            except Exception as e:
-                print(f"[Cache] Failed to clear Turso: {e}")
-
-    def stats(self):
-        total = sum(len(v) for v in self._entries.values())
-        return {
-            'total_entries': total,
-            'turso_connected': self._turso_available,
-            'contracts': {k: len(v) for k, v in self._entries.items()}
-        }
-
-@st.cache_resource
-def get_semantic_cache():
-    return SemanticCache()
+# ============================================================
+# SEMANTIC SIMILARITY CACHE — imported from cache_manager.py
+# ============================================================
+from cache_manager import SemanticCache, get_semantic_cache
 
 # ============================================================
 # INIT FUNCTIONS
@@ -916,7 +721,7 @@ def load_api_keys():
         keys['openai'] = st.secrets["OPENAI_API_KEY"]
         keys['anthropic'] = st.secrets["ANTHROPIC_API_KEY"]
         return keys
-    except:
+    except Exception:
         pass
     
     # Then try file
@@ -942,7 +747,6 @@ def init_clients():
 def init_contract_manager():
     return ContractManager()
 
-@st.cache_resource
 @st.cache_resource
 def init_logger():
     return ContractLogger()
@@ -1843,7 +1647,7 @@ def _detect_grievance_patterns(question):
 
     # --- MINIMUM DAYS OFF ---
     if 'days off' in q and ('month' in q or 'line' in q or 'schedule' in q):
-        alerts.append("⚠️ DAYS OFF MINIMUM: Per Section 14.E.5.d, minimum is 13 Days Off for a 30-day month and 14 Days Off for a 31-day month. Verify the published line meets this requirement.")
+        alerts.append("⚠️ DAYS OFF MINIMUM: Per Section 14.E.2.d (LOA #15), minimum is 13 Days Off for a 30-day month and 14 Days Off for a 31-day month. Verify the published line meets this requirement.")
 
     # --- POSITIVE CONTACT ---
     if 'schedule change' in q or 'reassign' in q or 'no call' in q or 'no contact' in q or 'never called' in q or 'text message' in q or 'text only' in q or 'email only' in q or 'voicemail' in q or ('no phone' in q and 'call' in q) or ('text' in q and 'no call' in q) or ('changed' in q and ('text' in q or 'email' in q)):
@@ -2061,7 +1865,7 @@ Do NOT use dollar signs ($) — write amounts without them (Streamlit renders $ 
         if is_pay_question:
             pay_prompt_sections = """
 CURRENT PAY RATES:
-DOS = July 24, 2018. Per Section 3.B.3, rates increase 2% annually on DOS anniversary. As of February 2026: 7 increases (July 2019–2025). CURRENT RATE = Appendix A DOS rate × 1.14869. Always use DOS column, multiply by 1.14869, show math. If longevity year is stated, look up that rate in Appendix A and calculate. Do NOT say you cannot find the rate if a year is provided.
+DOS = July 24, 2018. Per Section 3.B.3, rates increase 2% annually on DOS anniversary. As of today: {PAY_INCREASES} increases (July 2019–July {2018 + PAY_INCREASES}). CURRENT RATE = Appendix A DOS rate × {PAY_MULTIPLIER:.5f}. Always use DOS column, multiply by {PAY_MULTIPLIER:.5f}, show math. If longevity year is stated, look up that rate in Appendix A and calculate. Do NOT say you cannot find the rate if a year is provided.
 
 PAY QUESTION RULES:
 When pay/compensation is involved:
@@ -2224,9 +2028,18 @@ PAY_RATES_DOS = {
     }
 }
 
-# 2% annual increase: DOS July 24, 2018. As of Feb 2026 = 7 increases (Jul 2019–Jul 2025)
-PAY_MULTIPLIER = 1.02 ** 7  # 1.14868567
-PAY_INCREASES = 7
+# 2% annual increase: DOS July 24, 2018. Computed dynamically so it never goes stale.
+def _compute_pay_increases():
+    """Count completed DOS anniversaries — same pattern as per diem calculation."""
+    dos_date = datetime(2018, 7, 24)
+    now = datetime.now()
+    anniversaries = now.year - dos_date.year
+    if (now.month, now.day) < (dos_date.month, dos_date.day):
+        anniversaries -= 1
+    return max(0, anniversaries)
+
+PAY_INCREASES = _compute_pay_increases()
+PAY_MULTIPLIER = 1.02 ** PAY_INCREASES
 
 # Contract definitions for instant lookup
 DEFINITIONS_LOOKUP = {
@@ -2546,7 +2359,7 @@ def _format_pay_answer(aircraft, position, year):
         dos_rate = PAY_RATES_DOS[ac][pos][year]
         current_rate = round(dos_rate * PAY_MULTIPLIER, 2)
         citation_parts.append(f'{pos} Year {year}: DOS rate {dos_rate:.2f}')
-        rate_lines.append(f'- {pos} Year {year}: DOS rate {dos_rate:.2f} x 1.02^{PAY_INCREASES} (1.14869) = {current_rate:.2f} per hour')
+        rate_lines.append(f'- {pos} Year {year}: DOS rate {dos_rate:.2f} x 1.02^{PAY_INCREASES} ({PAY_MULTIPLIER:.5f}) = {current_rate:.2f} per hour')
 
     citation_text = '; '.join(citation_parts)
 
@@ -2726,7 +2539,6 @@ _SHORTHAND_MAP = [
     (r"\byrs\b", "years"),
     (r"\bhr\b", "hour"),
     (r"\bhrs\b", "hours"),
-    (r"\bmin\b(?!imum)", "minutes"),
     (r"\bmos?\b", "months"),
     (r"\bOT\b", "overtime"),
     (r"\bot\b", "overtime"),
@@ -2767,7 +2579,6 @@ _SHORTHAND_MAP = [
     (r"\bpcd\b", "portable communications device"),
     (r"\bcrew sked\b", "crew scheduling"),
     (r"\bcrewsked\b", "crew scheduling"),
-    (r"\bdo\b(?=\s+(?:said|says|told|called|require))", "director of operations"),
     (r"\bexco\b", "executive council"),
     (r"\balpa\b", "union"),
     (r"\bioe\b", "initial operating experience"),
@@ -2813,7 +2624,8 @@ def ask_question(question, chunks, embeddings, openai_client, anthropic_client, 
     # Only cache CLEAR and AMBIGUOUS answers — never cache NOT_ADDRESSED
     # A NOT_ADDRESSED might be a retrieval miss; next attempt could succeed
     if status != 'NOT_ADDRESSED':
-        semantic_cache.store(question_embedding, normalized, answer, status, response_time, contract_id)
+        category = classify_question(normalized)
+        semantic_cache.store(question_embedding, normalized, answer, status, response_time, contract_id, category)
 
     # "Did you mean?" — append suggestions when NOT_ADDRESSED
     if status == 'NOT_ADDRESSED':
@@ -2883,7 +2695,7 @@ def _load_top_questions():
         logger = init_logger()
         contract_id = st.session_state.get('selected_contract')
         return logger.get_top_questions(5, contract_id=contract_id)
-    except:
+    except Exception:
         return []
 
 def render_analytics_dashboard():
@@ -2931,7 +2743,7 @@ if not st.session_state.authenticated:
         if submitted:
             try:
                 correct_password = st.secrets["APP_PASSWORD"]
-            except:
+            except Exception:
                 correct_password = "nacpilot2026"
             if password == correct_password:
                 st.session_state.authenticated = True

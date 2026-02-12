@@ -6,210 +6,352 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 from contract_logger import ContractLogger
 
-st.set_page_config(page_title="Admin Dashboard", page_icon="🔒", layout="wide")
+st.set_page_config(page_title="AskTheContract — Admin", page_icon="✈️", layout="wide")
 
 # ============================================================
-# ADMIN PASSWORD GATE
+# PROFESSIONAL CSS THEME
+# ============================================================
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    /* ── Global ── */
+    html, body, [class*="css"] {
+        font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .stApp {
+        background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+    }
+    #MainMenu, footer, header { visibility: hidden; }
+    .block-container {
+        padding-top: 2rem !important;
+        max-width: 1200px;
+    }
+
+    /* ── Metric cards ── */
+    div[data-testid="stMetric"] {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        text-align: center;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    }
+    div[data-testid="stMetric"] label {
+        font-family: 'DM Sans', sans-serif !important;
+        font-size: 0.7rem !important;
+        font-weight: 600 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.06em !important;
+        color: #64748b !important;
+    }
+    div[data-testid="stMetric"] [data-testid="stMetricValue"] {
+        font-family: 'DM Sans', sans-serif !important;
+        font-weight: 700 !important;
+        color: #0f172a !important;
+        letter-spacing: -0.03em !important;
+    }
+
+    /* ── Tab styling ── */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 0.25rem;
+    }
+    .stTabs [data-baseweb="tab"] {
+        font-family: 'DM Sans', sans-serif;
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: #64748b;
+        border-radius: 8px;
+        padding: 0.6rem 1.25rem;
+        background: transparent;
+        border: none;
+    }
+    .stTabs [aria-selected="true"] {
+        background: #0f172a !important;
+        color: #ffffff !important;
+    }
+
+    /* ── Buttons ── */
+    .stButton > button {
+        font-family: 'DM Sans', sans-serif;
+        font-weight: 600;
+        border-radius: 8px;
+    }
+
+    /* ── Select boxes ── */
+    .stSelectbox label {
+        font-family: 'DM Sans', sans-serif !important;
+        font-weight: 600 !important;
+        font-size: 0.78rem !important;
+        color: #64748b !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.04em !important;
+    }
+
+    /* ── Progress bars ── */
+    .stProgress > div > div {
+        background: #f1f5f9;
+        border-radius: 100px;
+        height: 6px !important;
+    }
+    .stProgress > div > div > div {
+        background: #1e293b;
+        border-radius: 100px;
+    }
+
+    /* ── Captions ── */
+    .stCaption, [data-testid="stCaptionContainer"] {
+        font-family: 'DM Sans', sans-serif;
+    }
+
+    /* ── Markdown text ── */
+    .stMarkdown {
+        font-family: 'DM Sans', sans-serif;
+    }
+
+    /* ── Dividers ── */
+    hr {
+        border-color: #e2e8f0;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ============================================================
+# PASSWORD GATE
 # ============================================================
 if 'admin_authenticated' not in st.session_state:
     st.session_state.admin_authenticated = False
 
 if not st.session_state.admin_authenticated:
-    st.title("🔒 Admin Dashboard")
-    st.write("Authorized access only.")
-
-    with st.form("admin_login"):
-        password = st.text_input("Admin password:", type="password")
-        submitted = st.form_submit_button("Login", type="primary")
-        if submitted:
-            try:
-                correct = st.secrets["ADMIN_PASSWORD"]
-            except Exception:
-                correct = "nacadmin2026"
-            if password == correct:
-                st.session_state.admin_authenticated = True
-                st.rerun()
-            else:
-                st.error("Incorrect admin password.")
+    st.markdown("")
+    st.markdown("")
+    col_l, col_m, col_r = st.columns([1, 1, 1])
+    with col_m:
+        st.markdown("#### ✈️ Admin Dashboard")
+        st.caption("Authorized access only")
+        with st.form("admin_login"):
+            password = st.text_input("Password", type="password", label_visibility="collapsed", placeholder="Enter admin password")
+            submitted = st.form_submit_button("Sign In", type="primary", use_container_width=True)
+            if submitted:
+                try:
+                    correct = st.secrets["ADMIN_PASSWORD"]
+                except Exception:
+                    correct = "nacadmin2026"
+                if password == correct:
+                    st.session_state.admin_authenticated = True
+                    st.rerun()
+                else:
+                    st.error("Incorrect password.")
     st.stop()
 
 # ============================================================
-# ADMIN DASHBOARD
+# DASHBOARD
 # ============================================================
-st.title("📊 Admin Dashboard")
-
 @st.cache_resource
 def get_logger():
     return ContractLogger()
 
 logger = get_logger()
-
-# --- Contract selector ---
 contracts = logger.admin_get_contracts()
 
 if not contracts:
-    st.warning("No question data found yet. Questions will appear here after pilots start using the app.")
+    st.info("No data yet. Questions will appear after pilots start using the app.")
     st.stop()
 
-selected = st.selectbox("Select Contract:", contracts)
+# ── Header ──
+st.markdown("""
+<div style="display:flex; align-items:center; justify-content:space-between; padding:1.25rem 1.75rem; background:#0f172a; border-radius:12px; margin-bottom:1.5rem; box-shadow:0 4px 24px rgba(15,23,42,0.12);">
+    <div style="display:flex; align-items:center; gap:0.75rem;">
+        <span style="color:#fff; font-size:1.35rem; font-weight:700; letter-spacing:-0.02em;">✈️ AskTheContract</span>
+        <span style="background:#2563eb; color:#fff; font-size:0.7rem; font-weight:600; padding:0.2rem 0.6rem; border-radius:100px; letter-spacing:0.04em; text-transform:uppercase;">Admin</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-st.write("---")
+# Contract selector
+if len(contracts) > 1:
+    selected = st.selectbox("CONTRACT", contracts)
+else:
+    selected = contracts[0]
+    st.caption(f"CONTRACT: **{selected}**")
 
-# ============================================================
-# OVERVIEW
-# ============================================================
-st.header(f"📋 {selected} — Overview")
-
+# ── Key metrics ──
 summary = logger.admin_summary(selected)
 tier1_api = logger.admin_tier1_vs_api(selected)
-
-col1, col2, col3, col4, col5 = st.columns(5)
-with col1:
-    st.metric("Total Questions", summary['total'])
-with col2:
-    st.metric("Avg Response", f"{summary['avg_time']:.1f}s" if summary['avg_time'] else "N/A")
-with col3:
-    clear = summary['status_counts'].get('CLEAR', 0)
-    total = summary['total']
-    st.metric("CLEAR Rate", f"{clear/total*100:.0f}%" if total > 0 else "N/A")
-with col4:
-    st.metric("Tier 1 (Free)", tier1_api['tier1'])
-with col5:
-    st.metric("API Calls", tier1_api['api'])
-
-# Cost estimate
+total = summary['total']
+clear_count = summary['status_counts'].get('CLEAR', 0)
+ambiguous_count = summary['status_counts'].get('AMBIGUOUS', 0)
+not_addressed_count = summary['status_counts'].get('NOT_ADDRESSED', 0)
+clear_rate = f"{clear_count/total*100:.0f}%" if total > 0 else "—"
+avg_time = f"{summary['avg_time']:.1f}s" if summary['avg_time'] else "—"
 api_count = tier1_api['api']
-est_cost_low = api_count * 0.026  # ~2.6¢ cache read
-est_cost_high = api_count * 0.043  # ~4.3¢ cache write
-st.caption(f"💰 Estimated API cost: ${est_cost_low:.2f} – ${est_cost_high:.2f} ({api_count} API calls × 2.6–4.3¢ avg)")
+est_cost = f"${api_count * 0.034:.2f}"
 
-# Status breakdown
-st.subheader("Status Breakdown")
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("🔵 CLEAR", summary['status_counts'].get('CLEAR', 0))
-with col2:
-    st.metric("🟡 AMBIGUOUS", summary['status_counts'].get('AMBIGUOUS', 0))
-with col3:
-    st.metric("⚪ NOT ADDRESSED", summary['status_counts'].get('NOT_ADDRESSED', 0))
+c1, c2, c3, c4, c5 = st.columns(5)
+c1.metric("Total Questions", total)
+c2.metric("Clear Rate", clear_rate)
+c3.metric("Avg Response", avg_time)
+c4.metric("Tier 1 (Free)", tier1_api['tier1'])
+c5.metric("Est. API Cost", est_cost, f"{api_count} calls")
 
-st.write("---")
-
-# ============================================================
-# QUESTIONS BY CATEGORY
-# ============================================================
-st.header("📂 Questions by Category")
-
-categories = logger.admin_questions_by_category(selected)
-if categories:
-    total_cat = sum(c[1] for c in categories)
-    for cat, count in categories:
-        pct = count / total_cat * 100 if total_cat > 0 else 0
-        st.progress(pct / 100, text=f"{cat}: {count} ({pct:.0f}%)")
-else:
-    st.caption("No category data yet.")
-
-st.write("---")
+# Status bar
+st.markdown(f"""
+<div style="display:flex; align-items:center; gap:1.5rem; padding:0.75rem 1.25rem; background:#fff; border:1px solid #e2e8f0; border-radius:10px; margin:0.5rem 0 1.5rem 0; font-size:0.82rem; font-weight:500; color:#475569;">
+    <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#3b82f6; margin-right:6px;"></span>Clear: {clear_count}</span>
+    <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#d97706; margin-right:6px;"></span>Ambiguous: {ambiguous_count}</span>
+    <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#94a3b8; margin-right:6px;"></span>Not Addressed: {not_addressed_count}</span>
+    <span style="margin-left:auto;"><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#16a34a; margin-right:6px;"></span>System Healthy</span>
+</div>
+""", unsafe_allow_html=True)
 
 # ============================================================
-# TOP 20 MOST ASKED
+# TABS
 # ============================================================
-st.header("🔥 Top 20 Most Asked Questions")
+tab_questions, tab_cache, tab_satisfaction, tab_logs, tab_export = st.tabs([
+    "Questions", "Cache", "Satisfaction", "Logs", "Export"
+])
 
-top = logger.admin_top_questions(selected, limit=20)
-if top:
-    for i, (q_text, count) in enumerate(top, 1):
-        label = f"**{i}.** {q_text}"
-        if count > 1:
-            label += f"  ·  *{count}x*"
-        st.markdown(label)
-else:
-    st.caption("No questions logged yet.")
+# ── QUESTIONS TAB ──
+with tab_questions:
+    col_left, col_right = st.columns([3, 2], gap="large")
 
-st.write("---")
+    with col_left:
+        st.markdown("**Most Asked Questions**")
+        top = logger.admin_top_questions(selected, limit=15)
+        if top:
+            for i, (q_text, count) in enumerate(top, 1):
+                st.caption(f"`{i:02d}`  {q_text}  ·  **{count}×**")
+        else:
+            st.caption("No questions yet.")
 
-# ============================================================
-# AMBIGUOUS QUESTIONS (CONTRACT UNCLEAR)
-# ============================================================
-st.header("🟡 Ambiguous Questions — Where the Contract is Unclear")
-st.caption("These questions came back AMBIGUOUS. Useful for identifying provisions that need clearer language.")
+    with col_right:
+        st.markdown("**By Category**")
+        categories = logger.admin_questions_by_category(selected)
+        if categories:
+            total_cat = sum(c[1] for c in categories)
+            for cat, count in categories:
+                pct = count / total_cat * 100 if total_cat > 0 else 0
+                st.progress(pct / 100, text=f"{cat}: {count}")
+        else:
+            st.caption("No category data yet.")
 
-ambiguous = logger.admin_ambiguous_questions(selected)
-if ambiguous:
-    for q_text, count in ambiguous:
-        label = f"• {q_text}"
-        if count > 1:
-            label += f"  ·  *{count}x*"
-        st.markdown(label)
-else:
-    st.caption("No ambiguous answers recorded. That's a good sign.")
+        st.markdown("")
+        st.markdown("**Ambiguous — Contract Unclear**")
+        ambiguous = logger.admin_ambiguous_questions(selected)
+        if ambiguous:
+            for q_text, count in ambiguous:
+                count_str = f"  ·  **{count}×**" if count > 1 else ""
+                st.caption(f"🟡 {q_text}{count_str}")
+        else:
+            st.caption("No ambiguous answers recorded ✓")
 
-st.write("---")
+# ── CACHE TAB ──
+with tab_cache:
+    st.caption("Clear cached answers by category. Use when you deploy code changes, add LOAs/MOAs, or onboard a new contract.")
 
-# ============================================================
-# USER SATISFACTION (RATINGS)
-# ============================================================
-st.header("👍 User Satisfaction")
+    try:
+        from cache_manager import get_semantic_cache
+        cache = get_semantic_cache()
 
-ratings = logger.admin_ratings(selected)
-if ratings['total'] > 0:
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("👍 Thumbs Up", ratings['up'])
-    with col2:
-        st.metric("👎 Thumbs Down", ratings['down'])
-    with col3:
-        st.metric("Satisfaction", f"{ratings['satisfaction']}%")
+        cache_stats = cache.stats()
+        category_stats = cache.get_category_stats(selected)
+        contract_total = cache_stats['contracts'].get(selected, 0)
 
-    if ratings['down_questions']:
-        st.subheader("Questions Needing Review (Thumbs Down)")
-        for q_text, ts in ratings['down_questions']:
-            date_str = ts[:10] if ts else ""
-            st.markdown(f"• {q_text}  ·  *{date_str}*")
-else:
-    st.caption("No ratings yet.")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Cached Answers", contract_total)
+        c2.metric("Categories", len(category_stats))
+        turso_str = "✅ Connected" if cache_stats['turso_connected'] else "Memory Only"
+        c3.metric("Turso", turso_str)
 
-st.write("---")
+        if not cache_stats['turso_connected']:
+            st.info("💡 **Cache data lives in Turso Cloud.** You're running locally without Turso credentials, so cache shows empty. Deploy to Railway and check askthecontract.com/admin to see your real cached answers and clear by category.")
+        elif category_stats:
+            st.markdown("")
+            st.markdown("**Cached Answers by Category**")
+            for cat, count in sorted(category_stats.items(), key=lambda x: x[1], reverse=True):
+                pct = count / max(contract_total, 1) * 100
+                st.progress(pct / 100, text=f"{cat}: {count}")
 
-# ============================================================
-# RECENT QUESTIONS LOG
-# ============================================================
-st.header("📋 Recent Questions Log")
+            st.markdown("---")
+            clear_options = ["Select a category..."] + sorted(category_stats.keys()) + ["⚠️ ALL CATEGORIES"]
+            clear_choice = st.selectbox("Clear cache for:", clear_options)
 
-recent = logger.admin_recent_questions(selected, limit=50)
-if recent:
-    for ts, q_text, status, rt in recent:
-        time_str = ts[5:16] if ts else "?"  # MM-DD HH:MM
-        rt_str = f"{rt:.1f}s" if rt else "0.0s"
-        status_icon = "🔵" if status == "CLEAR" else "🟡" if status == "AMBIGUOUS" else "⚪"
-        st.caption(f"{time_str} | {status_icon} {status} | {rt_str} | {q_text[:80]}")
-else:
-    st.caption("No questions logged yet.")
+            if clear_choice and clear_choice != "Select a category...":
+                if clear_choice == "⚠️ ALL CATEGORIES":
+                    st.warning(f"This will delete all {contract_total} cached answers for {selected}.")
+                    if st.button("Clear All Cached Answers", type="primary"):
+                        cache.clear(contract_id=selected)
+                        st.success(f"Cleared {contract_total} cached answers.")
+                        st.rerun()
+                else:
+                    count = category_stats.get(clear_choice, 0)
+                    st.info(f"This will delete {count} cached answers in **{clear_choice}**. Other categories stay warm.")
+                    if st.button(f"Clear {clear_choice}", type="primary"):
+                        removed = cache.clear_category(selected, clear_choice)
+                        st.success(f"Cleared {removed} cached answers.")
+                        st.rerun()
+        else:
+            st.caption("No cached answers for this contract yet. Cache populates as pilots ask questions.")
 
-st.write("---")
+    except Exception as e:
+        st.warning(f"Cache management unavailable: {e}")
 
-# ============================================================
-# CSV EXPORT
-# ============================================================
-st.header("📤 Export Data")
+# ── SATISFACTION TAB ──
+with tab_satisfaction:
+    ratings = logger.admin_ratings(selected)
+    if ratings['total'] > 0:
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Thumbs Up", ratings['up'])
+        c2.metric("Thumbs Down", ratings['down'])
+        c3.metric("Satisfaction", f"{ratings['satisfaction']}%")
 
-csv_data = logger.admin_export_csv(selected)
-if csv_data and len(csv_data.split("\n")) > 1:
-    st.download_button(
-        label=f"⬇️ Download {selected} Questions (CSV)",
-        data=csv_data,
-        file_name=f"{selected}_questions_export.csv",
-        mime="text/csv"
-    )
-    st.caption(f"{len(csv_data.split(chr(10))) - 1} questions in export")
-else:
-    st.caption("No data to export.")
+        if ratings['down_questions']:
+            st.markdown("")
+            st.markdown("**Needs Review**")
+            for q_text, ts in ratings['down_questions']:
+                date_str = ts[:10] if ts else ""
+                st.caption(f"🔴 {q_text}  ·  *{date_str}*")
+    else:
+        st.caption("No ratings yet. Ratings appear as pilots use the thumbs up/down buttons.")
 
-# ---- Footer ----
-st.write("---")
-st.caption("🔒 Admin Dashboard — data is per-contract and isolated. No cross-contract data leaks.")
+# ── LOGS TAB ──
+with tab_logs:
+    recent = logger.admin_recent_questions(selected, limit=50)
+    if recent:
+        for ts, q_text, status, rt in recent:
+            time_str = ts[5:16] if ts else "—"
+            rt_str = f"{rt:.1f}s" if rt else "0.0s"
+            icon = "🔵" if status == "CLEAR" else "🟡" if status == "AMBIGUOUS" else "⚪"
+            st.caption(f"`{time_str}`  {icon}  `{rt_str}`  {q_text}")
+    else:
+        st.caption("No questions logged yet.")
 
-# Logout
-if st.button("🚪 Admin Logout"):
-    st.session_state.admin_authenticated = False
-    st.rerun()
+# ── EXPORT TAB ──
+with tab_export:
+    csv_data = logger.admin_export_csv(selected)
+    if csv_data and len(csv_data.split("\n")) > 1:
+        row_count = len(csv_data.split(chr(10))) - 1
+        st.markdown(f"**{selected}** — {row_count} questions available")
+        st.download_button(
+            label=f"Download CSV ({row_count} rows)",
+            data=csv_data,
+            file_name=f"{selected}_questions_export.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    else:
+        st.caption("No data to export.")
+
+# ── Footer ──
+st.markdown("---")
+c1, c2 = st.columns([4, 1])
+with c1:
+    st.caption("AskTheContract Admin — data is per-contract and isolated")
+with c2:
+    if st.button("Sign Out"):
+        st.session_state.admin_authenticated = False
+        st.rerun()
