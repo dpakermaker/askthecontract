@@ -1846,6 +1846,128 @@ def _detect_grievance_patterns(question):
 # ============================================================
 # API CALL
 # ============================================================
+# ============================================================
+# QUESTION COMPLEXITY ROUTER
+# Routes questions to the right model tier:
+#   SIMPLE  → Haiku (cheapest, ~0.3¢/question)
+#   STANDARD → Sonnet (balanced, ~3.4¢/question)
+#   COMPLEX  → Opus (smartest, ~20¢/question)
+# ============================================================
+
+# Model strings for each tier
+MODEL_TIERS = {
+    'simple': 'claude-haiku-4-5-20251001',
+    'standard': 'claude-sonnet-4-20250514',
+    'complex': 'claude-opus-4-20250514',
+}
+
+# Indicators that a question is COMPLEX — needs Opus-level reasoning
+_COMPLEX_INDICATORS = [
+    # Pay scenarios with specific numbers
+    'what do i get paid', 'what would i get paid', 'what should i get paid',
+    'what am i owed', 'how much should i be paid', 'calculate my pay',
+    # Duty crossing into day off (overtime scope disputes)
+    'into my day off', 'into a day off', 'past my day off',
+    'extended into', 'crossed into',
+    # Multi-provision scenarios
+    'extended and', 'junior assigned and', 'on reserve and',
+    # Explicit ambiguity / grievance strength questions
+    'is this a grievance', 'should i grieve', 'do i have a grievance',
+    'contract violation', 'violated the contract', 'violate the contract',
+    # Complex comparisons
+    'difference between', 'compared to', 'which is better',
+    'what are my options', 'what are all the',
+]
+
+# Indicators that a question is SIMPLE — Haiku can handle it
+_SIMPLE_PATTERNS = [
+    # Section/location lookups
+    r'^what section (?:covers|talks about|addresses|is about)',
+    r'^where (?:can i find|does it talk about|is the section)',
+    r'^which section',
+    r'^what page',
+    # Simple yes/no contract questions
+    r'^(?:does|is|can|are) (?:the contract|there a)',
+    # Single-word definition lookups that didn't match Tier 1
+    r'^what (?:is|are) (?:a |an |the )?[\w\s]{1,25}\??$',
+]
+
+_SIMPLE_COMPILED = [re.compile(p, re.IGNORECASE) for p in _SIMPLE_PATTERNS]
+
+def _classify_complexity(question_lower, matching_packs=None, has_pay_ref=False, has_grievance_ref=False, conversation_history=None):
+    """Classify question complexity for model routing.
+    
+    Returns: 'simple', 'standard', or 'complex'
+    """
+    # --- COMPLEX CHECKS (most expensive model, most reasoning needed) ---
+    
+    # 1. Multiple scenario indicators with numbers = complex pay calculation
+    scenario_count = 0
+    scenario_keywords = ['duty', 'block', 'flew', 'hours', 'day off', 'overtime',
+                         'extension', 'junior assign', 'reserve', 'rap']
+    for kw in scenario_keywords:
+        if kw in question_lower:
+            scenario_count += 1
+    has_numbers = bool(re.search(r'\d+(?:\.\d+)?\s*(?:hours?|hr|pch|am|pm)', question_lower))
+    has_times = bool(re.search(r'\d{1,2}\s*(?:am|pm|a\.m\.|p\.m\.)|noon|midnight|\d{4}\s*(?:ldt|local|zulu)', question_lower))
+    
+    # Scenario with numbers AND multiple topics = complex
+    if has_numbers and scenario_count >= 2:
+        return 'complex'
+    
+    # Time references with pay/overtime = complex
+    if has_times and any(kw in question_lower for kw in ['pay', 'paid', 'overtime', 'premium', 'owed']):
+        return 'complex'
+    
+    # 2. Explicit complex indicators
+    if any(ind in question_lower for ind in _COMPLEX_INDICATORS):
+        return 'complex'
+    
+    # 3. Pre-computed pay reference fired AND grievance pattern fired = complex
+    if has_pay_ref and has_grievance_ref:
+        return 'complex'
+    
+    # 4. Cross-topic questions (multiple context packs matched)
+    if matching_packs and len(matching_packs) >= 2:
+        # Multi-pack + numbers = definitely complex
+        if has_numbers or has_times:
+            return 'complex'
+        # Multi-pack without numbers = standard (e.g., "tell me about reserve and scheduling")
+        return 'standard'
+    
+    # 5. Follow-up on a complex conversation — only if this looks like a follow-up
+    if conversation_history and len(conversation_history) >= 2:
+        last_answer = conversation_history[-1].get('answer', '')
+        if 'AMBIGUOUS' in last_answer or 'OVERTIME SCOPE DISPUTE' in last_answer:
+            # Only escalate if this looks like a follow-up (short, uses follow-up language)
+            follow_up_signals = ['what if', 'what about', 'and if', 'but what if',
+                                 'in that case', 'same scenario', 'same situation',
+                                 'follow up', 'followup', 'you said', 'you mentioned',
+                                 'what would change', 'does that mean']
+            is_short = len(question_lower.split()) <= 15
+            has_follow_up = any(sig in question_lower for sig in follow_up_signals)
+            if is_short and has_follow_up:
+                return 'complex'
+    
+    # --- SIMPLE CHECKS (cheapest model) ---
+    
+    # Short questions with simple patterns
+    if len(question_lower.split()) <= 10:
+        for pattern in _SIMPLE_COMPILED:
+            if pattern.search(question_lower):
+                return 'simple'
+    
+    # Single topic, no numbers, no scenarios = simple
+    if scenario_count == 0 and not has_numbers and not has_times:
+        if not has_pay_ref and not has_grievance_ref:
+            # Very short questions are usually simple lookups
+            if len(question_lower.split()) <= 8:
+                return 'simple'
+    
+    # --- DEFAULT: STANDARD ---
+    return 'standard'
+
+
 def _ask_question_api(question, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name, conversation_history=None):
     start_time = time.time()
 
@@ -1859,7 +1981,49 @@ def _ask_question_api(question, chunks, embeddings, openai_client, anthropic_cli
 
     context = "\n\n---\n\n".join(context_parts)
 
-    system_prompt = f"""You are a neutral contract reference tool for the {airline_name} pilot union contract (JCBA). Provide accurate, unbiased analysis based solely on contract language provided.
+    # Detect pay and grievance references (needed for routing AND injection)
+    pay_ref = _build_pay_reference(question)
+    grievance_ref = _detect_grievance_patterns(question)
+
+    # Route question to the right model tier
+    matching_packs = classify_all_matching_packs(question)
+    model_tier = _classify_complexity(
+        question.lower(),
+        matching_packs=matching_packs,
+        has_pay_ref=bool(pay_ref),
+        has_grievance_ref=bool(grievance_ref),
+        conversation_history=conversation_history,
+    )
+    model_name = MODEL_TIERS[model_tier]
+    print(f"[Router] {model_tier.upper()} → {model_name} | Q: {question[:80]}")
+
+    # --- BUILD SYSTEM PROMPT (tiered by complexity) ---
+    
+    if model_tier == 'simple':
+        # Haiku gets a compact prompt — just the essentials
+        system_prompt = f"""You are a neutral contract reference tool for the {airline_name} pilot union contract (JCBA).
+
+SCOPE: This tool ONLY searches the {airline_name} JCBA. No FARs, company manuals, or other policies.
+
+RULES:
+1. Quote exact contract language with section and page citations
+2. Never interpret beyond what the contract explicitly states
+3. Use neutral language ("the contract states" not "you get")
+4. Acknowledge when the contract is silent
+
+STATUS: 🔵 CLEAR (unambiguous answer), 🔵 AMBIGUOUS (multiple interpretations), 🔵 NOT ADDRESSED (no relevant language)
+
+FORMAT:
+📄 CONTRACT LANGUAGE: [Exact quote] 📍 [Section, Page]
+📝 EXPLANATION: [Plain English]
+🔵 STATUS: [CLEAR/AMBIGUOUS/NOT ADDRESSED] - [One sentence]
+⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.
+
+Do NOT use dollar signs ($) — write amounts without them (Streamlit renders $ as LaTeX)."""
+        max_tokens = 1000
+    else:
+        # Sonnet and Opus get the full system prompt
+        system_prompt = f"""You are a neutral contract reference tool for the {airline_name} pilot union contract (JCBA). Provide accurate, unbiased analysis based solely on contract language provided.
 
 SCOPE: This tool ONLY searches the {airline_name} JCBA. It has NO access to FARs, company manuals/SOPs, company policies/memos, other labor agreements, or employment laws. If asked about these, state: "This tool only searches the {airline_name} pilot contract (JCBA) and cannot answer questions about FAA regulations, company manuals, or other policies outside the contract."
 
@@ -1946,6 +2110,7 @@ RESPONSE FORMAT:
 ⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.
 
 Every claim must trace to a specific quoted provision. Do not speculate about "common practice" or reference external laws unless the contract itself references them."""
+        max_tokens = 2000
 
     messages = []
 
@@ -1968,13 +2133,11 @@ Every claim must trace to a specific quoted provision. Do not speculate about "c
 QUESTION: {question}
 """
 
-    # Inject pre-computed pay reference if applicable
-    pay_ref = _build_pay_reference(question)
+    # Inject pre-computed pay reference if applicable (already computed above for routing)
     if pay_ref:
         user_content += f"\n{pay_ref}\n"
 
-    # Inject grievance pattern alerts if applicable
-    grievance_ref = _detect_grievance_patterns(question)
+    # Inject grievance pattern alerts if applicable (already computed above for routing)
     if grievance_ref:
         user_content += f"\n{grievance_ref}\n"
 
@@ -1983,8 +2146,8 @@ QUESTION: {question}
     messages.append({"role": "user", "content": user_content})
 
     message = anthropic_client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=2000,
+        model=model_name,
+        max_tokens=max_tokens,
         temperature=0,
         system=[
             {
@@ -2006,7 +2169,7 @@ QUESTION: {question}
     else:
         status = 'NOT_ADDRESSED'
 
-    return answer, status, response_time
+    return answer, status, response_time, model_tier
 
 # ============================================================
 # TIER 1 — INSTANT ANSWERS (FREE, NO API CALL)
@@ -2532,7 +2695,7 @@ def ask_question(question, chunks, embeddings, openai_client, anthropic_client, 
         cached_answer, cached_status, cached_time = cached_result
         return cached_answer, cached_status, 0.0
 
-    answer, status, response_time = _ask_question_api(
+    answer, status, response_time, model_tier = _ask_question_api(
         normalized, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name, conversation_history
     )
 
