@@ -27,6 +27,164 @@ st.set_page_config(
 )
 
 # ============================================================
+# PROFESSIONAL CSS THEME
+# ============================================================
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    /* ── Global typography ── */
+    html, body, [class*="css"] {
+        font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    /* ── Page background ── */
+    .stApp {
+        background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+    }
+
+    /* ── Hide Streamlit chrome ── */
+    #MainMenu, footer, header { visibility: hidden; }
+
+    /* ── Hide page navigation in sidebar ── */
+    [data-testid="stSidebarNav"] { display: none; }
+
+    .block-container {
+        padding-top: 1.5rem !important;
+        max-width: 900px;
+    }
+
+    /* ── Sidebar ── */
+    [data-testid="stSidebar"] {
+        background: #0f172a;
+        border-right: none;
+    }
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] .stMarkdown p,
+    [data-testid="stSidebar"] .stMarkdown,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] .stCaption,
+    [data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+        color: #e2e8f0 !important;
+    }
+    [data-testid="stSidebar"] hr {
+        border-color: #334155;
+    }
+    [data-testid="stSidebar"] .stSelectbox label {
+        font-size: 0.75rem !important;
+        font-weight: 600 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+        color: #94a3b8 !important;
+    }
+    [data-testid="stSidebar"] .stButton > button {
+        background: #1e293b;
+        color: #e2e8f0;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        font-family: 'DM Sans', sans-serif;
+        font-weight: 500;
+        font-size: 0.85rem;
+        transition: all 0.15s ease;
+        text-align: left;
+        padding: 0.5rem 0.75rem;
+    }
+    [data-testid="stSidebar"] .stButton > button:hover {
+        background: #334155;
+        border-color: #475569;
+        color: #ffffff;
+    }
+    [data-testid="stSidebar"] [data-testid="stAlert"] {
+        background: #1e293b;
+        border: 1px solid #334155;
+        color: #cbd5e1;
+        border-radius: 8px;
+    }
+    [data-testid="stSidebar"] .stSubheader {
+        color: #94a3b8 !important;
+        font-size: 0.75rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+    }
+
+    /* ── Main content inputs ── */
+    .stTextInput > div > div > input {
+        font-family: 'DM Sans', sans-serif;
+        font-size: 0.95rem;
+        border-radius: 10px;
+        border: 2px solid #e2e8f0;
+        padding: 0.75rem 1rem;
+        transition: border-color 0.15s ease;
+    }
+    .stTextInput > div > div > input:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    .stTextInput label {
+        font-family: 'DM Sans', sans-serif;
+        font-weight: 600;
+        color: #334155;
+        font-size: 0.9rem;
+    }
+
+    /* ── Primary button ── */
+    .stFormSubmitButton > button,
+    button[kind="primary"] {
+        font-family: 'DM Sans', sans-serif;
+        font-weight: 600;
+        border-radius: 10px;
+        padding: 0.6rem 1.5rem;
+        font-size: 0.9rem;
+        letter-spacing: 0.01em;
+    }
+
+    /* ── Answer boxes ── */
+    [data-testid="stAlert"] {
+        border-radius: 10px;
+        font-family: 'DM Sans', sans-serif;
+        line-height: 1.65;
+        font-size: 0.9rem;
+        border-left-width: 4px;
+    }
+
+    /* ── Expanders ── */
+    .streamlit-expanderHeader {
+        font-family: 'DM Sans', sans-serif;
+        font-weight: 500;
+        font-size: 0.85rem;
+        color: #64748b;
+    }
+
+    /* ── General buttons ── */
+    .stButton > button {
+        font-family: 'DM Sans', sans-serif;
+        border-radius: 8px;
+    }
+
+    /* ── Markdown headings ── */
+    .stMarkdown h3 {
+        font-family: 'DM Sans', sans-serif;
+        font-weight: 700;
+        color: #0f172a;
+        font-size: 1.05rem;
+        letter-spacing: -0.01em;
+    }
+
+    /* ── Captions ── */
+    .stCaption, [data-testid="stCaptionContainer"] {
+        font-family: 'DM Sans', sans-serif;
+    }
+
+    /* ── Spinner ── */
+    .stSpinner > div {
+        font-family: 'DM Sans', sans-serif;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ============================================================
 # FEATURE 1: QUICK REFERENCE CARDS
 # Static content, zero API calls, loads instantly
 # ============================================================
@@ -2734,35 +2892,55 @@ if 'ratings' not in st.session_state:
 # LOGIN
 # ============================================================
 if not st.session_state.authenticated:
-    st.title("✈️ AskTheContract - Beta Access")
-    st.write("**Contract Language Search Engine for Pilots**")
+    st.markdown("")
+    st.markdown("")
+    col_l, col_m, col_r = st.columns([1, 1.2, 1])
+    with col_m:
+        st.markdown("""
+        <div style="text-align:center; margin-bottom:1.5rem;">
+            <div style="font-size:2.5rem; margin-bottom:0.25rem;">✈️</div>
+            <div style="font-size:1.5rem; font-weight:700; color:#0f172a; letter-spacing:-0.02em;">AskTheContract</div>
+            <div style="font-size:0.85rem; color:#64748b; margin-top:0.25rem;">Contract Language Search Engine for Pilots</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    with st.form("login_form"):
-        password = st.text_input("Enter beta password:", type="password")
-        submitted = st.form_submit_button("Login", type="primary")
-        if submitted:
-            try:
-                correct_password = st.secrets["APP_PASSWORD"]
-            except Exception:
-                correct_password = "nacpilot2026"
-            if password == correct_password:
-                st.session_state.authenticated = True
-                st.rerun()
-            else:
-                st.error("Incorrect password. Contact the developer for access.")
-    st.info("🔒 This is a beta test version.")
+        with st.form("login_form"):
+            password = st.text_input("Password", type="password", label_visibility="collapsed", placeholder="Enter access password")
+            submitted = st.form_submit_button("Sign In", type="primary", use_container_width=True)
+            if submitted:
+                try:
+                    correct_password = st.secrets["APP_PASSWORD"]
+                except Exception:
+                    correct_password = "nacpilot2026"
+                if password == correct_password:
+                    st.session_state.authenticated = True
+                    st.rerun()
+                else:
+                    st.error("Incorrect password. Contact the developer for access.")
+
+        st.caption("🔒 Beta access — authorized users only")
 
 # ============================================================
 # MAIN APP
 # ============================================================
 else:
-    st.title("✈️ AskTheContract")
-    st.markdown("**Search and retrieve exact contract language with page and section references.**")
-    st.caption("Provides a plain-language summary of the relevant contract text and highlights whether the language appears clear or ambiguous.")
+    st.markdown("""
+    <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.25rem;">
+        <span style="font-size:1.4rem; font-weight:700; color:#0f172a; letter-spacing:-0.02em;">✈️ AskTheContract</span>
+    </div>
+    """, unsafe_allow_html=True)
+    st.caption("Search and retrieve exact contract language with page and section references.")
 
     # ---- SIDEBAR ----
     with st.sidebar:
-        st.header("Contract Selection")
+        st.markdown("""
+        <div style="text-align:center; padding:1rem 0 0.5rem;">
+            <div style="font-size:1.15rem; font-weight:700; color:#ffffff; letter-spacing:-0.02em;">✈️ AskTheContract</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("---")
+
         manager = init_contract_manager()
         available_contracts = manager.get_available_contracts()
 
@@ -2772,7 +2950,7 @@ else:
         }
 
         selected_name = st.selectbox(
-            "Select your airline:",
+            "Airline",
             options=list(contract_options.keys())
         )
         selected_contract_id = contract_options[selected_name]
@@ -2784,39 +2962,35 @@ else:
         contract_info = manager.get_contract_info(selected_contract_id)
         airline_name = contract_info['airline_name']
 
-        st.info(f"""
-        **{airline_name}**
-
-        📄 Pages: {contract_info['total_pages']}
-
-        📅 Version: {contract_info['contract_version']}
-        """)
-
-        st.write("---")
+        st.markdown("---")
 
         # FEATURE 1: Quick Reference Cards
-        st.subheader("📖 Quick Reference")
+        st.caption("QUICK REFERENCE")
 
         for card_name, card_data in QUICK_REFERENCE_CARDS.items():
             if st.button(f"{card_data['icon']} {card_name}", key=f"ref_{card_name}", use_container_width=True):
                 st.session_state.show_reference = card_name
                 st.session_state.show_analytics = False
 
-        st.write("---")
-        if st.button("🔥 Most Asked Questions", use_container_width=True):
+        st.markdown("---")
+        if st.button("🔥 Most Asked", use_container_width=True):
             st.session_state.show_analytics = not st.session_state.show_analytics
             st.session_state.show_reference = None
             st.rerun()
-        if st.button("🗑️ Clear Conversation", use_container_width=True):
+        if st.button("🗑️ Clear Chat", use_container_width=True):
             st.session_state.conversation = []
             st.session_state.show_reference = None
             st.rerun()
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button("🚪 Sign Out", use_container_width=True):
             st.session_state.authenticated = False
             st.rerun()
 
     # ---- MAIN CONTENT ----
-    st.info(f"Limited to the {airline_name} Pilot Contract (JCBA). Does not reference FAA regulations, company manuals, or other policies.")
+    st.markdown(f"""
+    <div style="padding:0.6rem 1rem; background:#f1f5f9; border-radius:8px; font-size:0.8rem; color:#475569; margin-bottom:1rem;">
+        Limited to the {airline_name} Pilot Contract (JCBA). Does not reference FAA regulations, company manuals, or other policies.
+    </div>
+    """, unsafe_allow_html=True)
 
     # Show Quick Reference Card if selected
     if st.session_state.show_reference:
@@ -2846,7 +3020,17 @@ else:
     if submit_button and question:
         st.session_state.show_reference = None
 
-        with st.spinner("Searching contract..."):
+        # Prominent search indicator — visible on mobile and desktop
+        search_placeholder = st.empty()
+        search_placeholder.markdown("""
+        <div style="padding:1.25rem 1.5rem; background:#eff6ff; border:2px solid #bfdbfe; border-radius:12px; text-align:center; margin:1rem 0;">
+            <div style="font-size:1.5rem; margin-bottom:0.4rem;">🔍</div>
+            <div style="font-size:1rem; font-weight:600; color:#1e40af;">Searching your contract…</div>
+            <div style="font-size:0.82rem; color:#3b82f6; margin-top:0.25rem;">This may take up to 30 seconds for complex questions</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        with st.spinner(""):
             chunks, embeddings = load_contract(st.session_state.selected_contract)
             openai_client, anthropic_client = init_clients()
             history = st.session_state.conversation if st.session_state.conversation else None
@@ -2858,38 +3042,47 @@ else:
                 airline_name, history
             )
 
-            category = classify_question(question)
+        # Clear the search indicator once answer is ready
+        search_placeholder.empty()
 
-            logger = init_logger()
-            logger.log_question(
-                question_text=question,
-                answer_text=answer,
-                status=status,
-                contract_id=st.session_state.selected_contract,
-                response_time=response_time,
-                category=category
-            )
+        category = classify_question(question)
 
-            st.session_state.conversation.append({
-                'question': question,
-                'answer': answer,
-                'status': status,
-                'category': category,
-                'response_time': round(response_time, 1)
-            })
+        logger = init_logger()
+        logger.log_question(
+            question_text=question,
+            answer_text=answer,
+            status=status,
+            contract_id=st.session_state.selected_contract,
+            response_time=response_time,
+            category=category
+        )
+
+        st.session_state.conversation.append({
+            'question': question,
+            'answer': answer,
+            'status': status,
+            'category': category,
+            'response_time': round(response_time, 1)
+        })
 
     # ---- CONVERSATION HISTORY ----
     if st.session_state.conversation:
-        st.write("---")
+        st.markdown("---")
 
         for i, qa in enumerate(reversed(st.session_state.conversation)):
             q_num = len(st.session_state.conversation) - i
 
-            st.markdown(f"### Q{q_num}: {qa['question']}")
+            # Question header
+            st.markdown(f"""
+            <div style="display:flex; align-items:flex-start; gap:0.5rem; margin-bottom:0.25rem;">
+                <span style="background:#0f172a; color:#fff; font-size:0.7rem; font-weight:700; padding:0.15rem 0.5rem; border-radius:100px; letter-spacing:0.03em; margin-top:0.2rem; white-space:nowrap;">Q{q_num}</span>
+                <span style="font-size:1rem; font-weight:600; color:#0f172a;">{qa['question']}</span>
+            </div>
+            """, unsafe_allow_html=True)
 
             # FEATURE 2: Canonical Question Label
             category = qa.get('category', classify_question(qa['question']))
-            st.caption(f"📂 Question type: {category}  •  ⏱️ Answered in {qa.get('response_time', '?')}s")
+            st.caption(f"📂 {category}  •  ⏱️ {qa.get('response_time', '?')}s")
 
             # Answer with status color
             if qa['status'] == 'CLEAR':
@@ -2932,6 +3125,11 @@ This is not legal advice."""
                 st.code(copy_text, language=None)
                 st.caption("Select all text above → Ctrl+C (or Cmd+C on Mac)")
 
-            st.write("---")
+            st.markdown("---")
 
     # ---- FOOTER ----
+    st.markdown("""
+    <div style="text-align:center; padding:1rem 0; font-size:0.75rem; color:#94a3b8;">
+        AskTheContract · Exact contract language, not legal advice
+    </div>
+    """, unsafe_allow_html=True)
