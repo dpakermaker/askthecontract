@@ -604,6 +604,10 @@ QUESTION_CATEGORIES = {
     "Vacation / Leave": ['vacation', 'leave', 'sick leave', 'bereavement', 'military leave', 'fmla'],
     "Benefits": ['insurance', 'health', 'medical', 'dental', 'retirement', '401k'],
     "Furlough": ['furlough', 'recall', 'laid off', 'reduction'],
+    "Expenses / Per Diem": ['per diem', 'meal allowance', 'meal money', 'hotel', 'lodging', 'expenses', 'transportation', 'parking'],
+    "Sick Leave": ['sick', 'sick call', 'sick leave', 'calling in sick', 'illness', 'sick pay', 'sick bank'],
+    "Deadhead": ['deadhead', 'deadhead pay', 'deadhead rest', 'positioning', 'repositioning'],
+    "Hours of Service": ['hours of service', 'flight time limit', 'block limit', 'rest interruption', 'rest interrupted'],
 }
 
 def classify_question(question_text):
@@ -1271,9 +1275,11 @@ CONTEXT_PACKS = {
         'embedding_top_n': 10,
         'max_total': 25,
     },
-    # VACATION / LEAVE — Sections 8 & 9 + PTO + MOU #1
+    # VACATION / LEAVE / SICK — Sections 8, 9, 10 + PTO + MOU #1
     'vacation': {
-        'pages': [105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 121, 122, 123, 124, 125, 126, 127, 129, 130, 132, 134, 139,
+        'pages': [105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 121, 122, 123, 124, 125, 126, 127, 129, 130,
+                  131, 132, 133, 134, 135, 136, 137,  # Section 10: Sick Leave
+                  139,
                   379,  # MOU #1: PTO Day Conversion
         ],
         'embedding_top_n': 10,
@@ -1328,6 +1334,10 @@ CATEGORY_TO_PACK = {
     'Vacation / Leave': 'vacation',
     'Benefits': 'benefits',
     'Furlough': 'seniority',
+    'Expenses / Per Diem': 'expenses',
+    'Sick Leave': 'vacation',
+    'Deadhead': 'pay',
+    'Hours of Service': 'hours',
 }
 
 # Provision chains: keyword triggers → supplemental LOA/MOU pages
@@ -1398,12 +1408,12 @@ PROVISION_CHAINS = {
     'voluntary pickup': [183, 184, 185, 186],
     'pick up': [183, 184, 185, 186],
     'trip trade': [183, 184],
-    # Per diem → Section 3.J
-    'per diem': [57, 58],
-    'meal allowance': [57, 58],
-    'meal money': [57, 58],
-    'hotel': [57, 58],
-    'lodging': [57, 58],
+    # Per diem → Section 6.C (primary) + Section 3 references
+    'per diem': [57, 58, 99, 100, 101],
+    'meal allowance': [99, 100, 101],
+    'meal money': [99, 100, 101],
+    'hotel': [99, 100, 101, 102, 103],
+    'lodging': [99, 100, 101, 102, 103],
     # Sick leave → Section 10
     'sick': [131, 132, 133, 134, 135, 136, 137],
     'sick call': [131, 132, 133, 134, 135],
@@ -1529,11 +1539,14 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
             merged_pages.update(CONTEXT_PACKS[pk]['pages'])
 
         # Provision chain injection — add LOA/MOU pages triggered by keywords
+        chain_hits = []
         for keyword, chain_pages in PROVISION_CHAINS.items():
             if keyword in question_lower:
                 merged_pages.update(chain_pages)
+                chain_hits.append(keyword)
 
         pack_chunks = [c for c in chunks if c['page'] in merged_pages]
+        print(f"[Search] PACK MODE: {matching_packs} | chains: {chain_hits} | pages: {len(merged_pages)} | chunks: {len(pack_chunks)}")
 
         # Multi-pack gets slightly higher cap; single pack stays at 30
         if len(matching_packs) > 1:
@@ -1562,13 +1575,17 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
         # FALLBACK MODE: pure embedding search (General questions)
         # But still check provision chains for keyword-triggered pages
         chain_pages = set()
+        chain_hits = []
         for keyword, pages in PROVISION_CHAINS.items():
             if keyword in question_lower:
                 chain_pages.update(pages)
+                chain_hits.append(keyword)
         if chain_pages:
             pack_chunks = [c for c in chunks if c['page'] in chain_pages]
+            print(f"[Search] FALLBACK + CHAINS: {chain_hits} | pages: {len(chain_pages)} | chunks: {len(pack_chunks)}")
         else:
             pack_chunks = []
+            print(f"[Search] FALLBACK — no packs, no chains matched")
         embedding_top_n = 30
         max_total = 30
 
@@ -1618,6 +1635,10 @@ def search_contract(question, chunks, embeddings, openai_client, max_chunks=75):
             merged.append(chunk)
             if len(merged) >= max_total:
                 break
+
+    # Log final result
+    pages_sent = sorted(set(c['page'] for c in merged))
+    print(f"[Search] FINAL: {len(merged)} chunks from pages {pages_sent[:15]}{'...' if len(pages_sent) > 15 else ''}")
 
     return merged
 
@@ -2414,6 +2435,48 @@ If you have been extended more than once in a month, this is a potential contrac
     },
 }
 
+# Per diem is computed dynamically based on current date
+def _get_per_diem_answer():
+    """Build per diem Tier 1 answer with current rates based on anniversary increases."""
+    dos_date = datetime(2018, 7, 24)
+    now = datetime.now()
+    # Count anniversaries: each July 24 after DOS
+    anniversaries = now.year - dos_date.year
+    if (now.month, now.day) < (dos_date.month, dos_date.day):
+        anniversaries -= 1
+    anniversaries = max(0, anniversaries)
+
+    base_domestic = 56
+    base_international = 72
+    current_domestic = base_domestic + anniversaries
+    current_international = base_international + anniversaries
+
+    return f"""📄 CONTRACT LANGUAGE: "For Duty or other Company-Directed Assignments that are performed within the Contiguous United States, including all time during a layover in the United States, Fifty-Six Dollars ($56) per Day."
+📍 Section 6.C.2.a, Page 99
+
+"For Duty or other Company-directed Assignment that contains a segment that is to or from an airport outside the contiguous United States, including all layover time in a location outside of the contiguous United States: Seventy-Two Dollars ($72) per Day."
+📍 Section 6.C.2.b, Page 100
+
+"The Per Diem rates, as provided in subparagraph 6.C., shall be increased by one (1) Dollar ($1.00) per Day on each anniversary date of the Agreement."
+📍 Section 6.C.2.c, Page 100
+
+📝 EXPLANATION: Per the contract, pilots receive Per Diem for duty assignments that include rest periods away from their domicile. The base rates (DOS July 24, 2018) were 56/day domestic and 72/day international. Per Section 6.C.2.c, rates increase by 1/day on each contract anniversary.
+
+As of today, there have been {anniversaries} anniversary increases (July 2019 through July {dos_date.year + anniversaries}):
+- Domestic (contiguous U.S.): 56 + {anniversaries} = **{current_domestic}/day**
+- International: 72 + {anniversaries} = **{current_international}/day**
+
+Per Diem is calculated from the time of scheduled or actual report time at Domicile (whichever is later) until the scheduled or actual conclusion of duty at Domicile (whichever is later). Per Diem is only paid for assignments that include a rest period away from Domicile (Section 6.C.1).
+
+🔵 STATUS: CLEAR - The contract explicitly states per diem rates in Section 6.C.2 and the annual increase formula in Section 6.C.2.c.
+
+
+⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes."""
+
+# Per diem keywords checked separately in tier1_instant_answer
+_PER_DIEM_KEYWORDS = ['per diem', 'per diem rate', 'what is per diem', 'how much is per diem',
+                      'per diem amount', 'meal allowance', 'daily meal', 'per diem pay']
+
 def _match_tier1_rule(question_lower):
     """Check if a question matches a Tier 1 fixed-value rule.
     Returns the rule key or None."""
@@ -2516,6 +2579,11 @@ def tier1_instant_answer(question_lower):
         if not has_numeric_scenario:
             answer = TIER1_RULES[rule_key]['answer']
             return answer, 'CLEAR', round(time.time() - start, 1)
+
+    # --- PER DIEM (computed dynamically based on current date) ---
+    if any(kw in question_lower for kw in _PER_DIEM_KEYWORDS):
+        answer = _get_per_diem_answer()
+        return answer, 'CLEAR', round(time.time() - start, 1)
 
     # --- SCENARIO DETECTION: If question has duty/block/TAFD numbers, skip Tier 1 ---
     # These need the full API with pre-computed pay calculator
@@ -2699,8 +2767,10 @@ def ask_question(question, chunks, embeddings, openai_client, anthropic_client, 
         normalized, chunks, embeddings, openai_client, anthropic_client, contract_id, airline_name, conversation_history
     )
 
-    # Always store in cache
-    semantic_cache.store(question_embedding, normalized, answer, status, response_time, contract_id)
+    # Only cache CLEAR and AMBIGUOUS answers — never cache NOT_ADDRESSED
+    # A NOT_ADDRESSED might be a retrieval miss; next attempt could succeed
+    if status != 'NOT_ADDRESSED':
+        semantic_cache.store(question_embedding, normalized, answer, status, response_time, contract_id)
 
     return answer, status, response_time
 
