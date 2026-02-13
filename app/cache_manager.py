@@ -89,6 +89,12 @@ class SemanticCache:
                 "CREATE INDEX IF NOT EXISTS idx_cache_contract ON answer_cache(contract_id)",
                 # Add category column if it doesn't exist (safe for existing databases)
                 "ALTER TABLE answer_cache ADD COLUMN category TEXT DEFAULT ''",
+                # Metadata table for tracking cache-invalidation keys (e.g. PAY_INCREASES)
+                """CREATE TABLE IF NOT EXISTS cache_metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )""",
             ])
             if result:
                 self._turso_available = True
@@ -251,6 +257,45 @@ class SemanticCache:
             'turso_connected': self._turso_available,
             'contracts': {k: len(v) for k, v in self._entries.items()}
         }
+
+    def get_meta(self, key):
+        """Retrieve a metadata value from Turso. Returns None if not found."""
+        if not self._turso_available:
+            return None
+        try:
+            stmt = {
+                "sql": "SELECT value FROM cache_metadata WHERE key = ?",
+                "args": [{"type": "text", "value": key}]
+            }
+            result = self._turso_request([stmt])
+            if not result or 'results' not in result:
+                return None
+            select_result = result['results'][0]
+            if select_result.get('type') != 'ok':
+                return None
+            rows = select_result['response']['result'].get('rows', [])
+            if rows:
+                return rows[0][0]['value']
+            return None
+        except Exception as e:
+            print(f"[Cache] Failed to get metadata '{key}': {e}")
+            return None
+
+    def set_meta(self, key, value):
+        """Store a metadata value in Turso (upsert)."""
+        if not self._turso_available:
+            return
+        try:
+            stmt = {
+                "sql": "INSERT INTO cache_metadata (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP",
+                "args": [
+                    {"type": "text", "value": key},
+                    {"type": "text", "value": str(value)},
+                ]
+            }
+            self._turso_request([stmt])
+        except Exception as e:
+            print(f"[Cache] Failed to set metadata '{key}': {e}")
 
 
 @st.cache_resource

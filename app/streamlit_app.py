@@ -1678,10 +1678,9 @@ def _build_pay_reference(question):
     if 'hostile' in q:
         premiums['Hostile Area (200%)'] = 2.00
 
-    # If we have no year and no numeric values, just provide rate table reference
+    # If we have no year and no numeric values, provide full rate table
+    # so the model uses pre-computed rates instead of recalculating
     has_scenario = duty_hours or block_hours or tafd_hours
-    if not year and not has_scenario:
-        return ""
 
     # Build the reference
     lines = ["PRE-COMPUTED PAY REFERENCE (use these exact numbers — do not recalculate):"]
@@ -2198,6 +2197,35 @@ def _compute_pay_increases():
 
 PAY_INCREASES = _compute_pay_increases()
 PAY_MULTIPLIER = 1.02 ** PAY_INCREASES
+
+# Auto-invalidate cached pay answers when PAY_INCREASES changes (every July)
+def _check_pay_cache_freshness():
+    """Compare stored PAY_INCREASES against current. If different, purge pay cache entries."""
+    try:
+        cache = get_semantic_cache()
+        stored = cache.get_meta('pay_increases')
+        current = str(PAY_INCREASES)
+        if stored != current:
+            pay_categories = [
+                "Pay → Hourly Rate",
+                "Pay → Daily Pay Guarantee",
+                "Pay → Duty Rig",
+                "Pay → Trip Rig / TAFD",
+                "Pay → Overtime / Premium",
+                "Pay → Junior Assignment Premium",
+                "Pay → General Calculation",
+            ]
+            total_cleared = 0
+            for cat in pay_categories:
+                total_cleared += cache.clear_category('nac_jcba', cat)
+            cache.set_meta('pay_increases', current)
+            print(f"[Pay Cache] PAY_INCREASES changed ({stored} → {current}). Purged {total_cleared} stale pay entries.")
+        else:
+            print(f"[Pay Cache] PAY_INCREASES unchanged ({current}). Cache is fresh.")
+    except Exception as e:
+        print(f"[Pay Cache] Freshness check failed: {e}")
+
+_check_pay_cache_freshness()
 
 # Contract definitions for instant lookup
 DEFINITIONS_LOOKUP = {
