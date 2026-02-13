@@ -148,6 +148,22 @@ st.markdown("""
         font-size: 0.9rem;
         border-left-width: 4px;
     }
+    /* Cap heading sizes inside answers — safety net */
+    [data-testid="stAlert"] h1 {
+        font-size: 1rem !important;
+        font-weight: 700 !important;
+        margin: 0.75rem 0 0.35rem !important;
+    }
+    [data-testid="stAlert"] h2 {
+        font-size: 0.95rem !important;
+        font-weight: 700 !important;
+        margin: 0.6rem 0 0.3rem !important;
+    }
+    [data-testid="stAlert"] h3 {
+        font-size: 0.9rem !important;
+        font-weight: 600 !important;
+        margin: 0.5rem 0 0.25rem !important;
+    }
 
     /* ── Expanders ── */
     .streamlit-expanderHeader {
@@ -1162,6 +1178,14 @@ FORCE_INCLUDE_RULES = {
             'the company shall schedule all night trip pairings consecutively',
         ]
     },
+    'check_airman_admin': {
+        'trigger_keywords': ['175%', '175 percent', 'check airman', 'instructor pilot', 'apd', 'administrative assignment', 'admin assignment'],
+        'must_include_phrases': [
+            'one hundred seventy-five percent (175%)',
+            'instructor pilots, check airmen and apd on administrative assignments',
+            'if such assignment is on a scheduled day off',
+        ]
+    },
 }
 
 def find_force_include_chunks(question_lower, all_chunks):
@@ -1306,10 +1330,15 @@ CATEGORY_TO_PACK = {
 # These fire regardless of pack category to catch cross-references
 PROVISION_CHAINS = {
     # Check Airman / Instructor topics → all Check Airman LOA/MOU pages
-    'check airman': [322, 323, 338, 339, 390, 392],
-    'instructor pilot': [322, 323, 338, 339, 390, 392],
-    'apd': [322, 323, 338, 339, 390, 392],
+    'check airman': [59, 60, 322, 323, 338, 339, 390, 392],
+    'instructor pilot': [59, 60, 322, 323, 338, 339, 390, 392],
+    'apd': [59, 60, 322, 323, 338, 339, 390, 392],
     'ghost bid': [322, 323, 338, 339],
+    '175%': [59, 60],
+    '175 percent': [59, 60],
+    'check airman pay': [59, 60, 390],
+    'administrative assignment': [59, 60],
+    'admin assignment': [59, 60],
     # Positive Contact → MOU #2 + Section 13.H
     'positive contact': [154, 155, 381],
     'schedule change': [154, 155, 381],
@@ -2013,7 +2042,12 @@ FORMAT:
 🔵 STATUS: [CLEAR/AMBIGUOUS/NOT ADDRESSED] - [One sentence]
 ⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.
 
-Do NOT use dollar signs ($) — write amounts without them (Streamlit renders $ as LaTeX)."""
+FORMATTING RULES:
+- Do NOT use markdown headings (#, ##, ###) — they render too large
+- Use **bold text** for sub-topics and labels instead
+- Keep answers compact and professional
+- Do NOT add a title or heading at the top of your answer
+- Do NOT use dollar signs ($) — write amounts without them (Streamlit renders $ as LaTeX)."""
         max_tokens = 1000
     else:
         # Sonnet and Opus get the full system prompt
@@ -2107,6 +2141,13 @@ RESPONSE FORMAT:
   Include ⚠️ OVERTIME SCOPE DISPUTE only when duty starts on a workday and extends into a Day Off (not for pure Day Off duty like JA)
 🔵 STATUS: [CLEAR/AMBIGUOUS/NOT ADDRESSED] - [One sentence justification]
 ⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.
+
+FORMATTING RULES:
+- Do NOT use markdown headings (#, ##, ###) — they render too large in the UI
+- Use **bold text** for sub-topics and labels instead (e.g., **Accrual:** not ## ACCRUAL)
+- Do NOT add a title or heading at the top of your answer — just start with the content
+- Keep answers compact, professional, and easy to scan
+- Use short paragraphs, not walls of text
 
 Every claim must trace to a specific quoted provision. Do not speculate about "common practice" or reference external laws unless the contract itself references them.
 
@@ -2915,6 +2956,8 @@ if 'show_analytics' not in st.session_state:
     st.session_state.show_analytics = False
 if 'ratings' not in st.session_state:
     st.session_state.ratings = {}
+if 'pending_question' not in st.session_state:
+    st.session_state.pending_question = None
 
 # ============================================================
 # LOGIN
@@ -3046,6 +3089,44 @@ else:
         submit_button = st.form_submit_button("Ask", type="primary")
 
     if submit_button and question:
+        st.session_state.pending_question = question
+
+    # ---- CONTRACT CHAPTERS (empty state) ----
+    if not st.session_state.conversation and not st.session_state.show_reference and not st.session_state.show_analytics and not st.session_state.pending_question:
+        st.markdown("")
+        st.markdown("""
+        <div style="text-align:center; color:#64748b; font-size:0.85rem; font-weight:500; margin-bottom:0.75rem;">
+            Explore your contract by section:
+        </div>
+        """, unsafe_allow_html=True)
+
+        contract_chapters = [
+            ("Section 3", "Compensation", "What is my hourly pay rate as a Captain?"),
+            ("Section 5", "Retirement & Insurance", "What retirement benefits does the contract provide?"),
+            ("Section 6", "Expenses & Lodging", "What is the per diem rate?"),
+            ("Section 7", "Deadheading", "What are the deadhead pay rules?"),
+            ("Section 8", "Leaves of Absence", "What types of leave am I entitled to?"),
+            ("Section 10", "Sick Leave", "What are the rules for calling in sick?"),
+            ("Section 11", "PTO", "How does PTO work?"),
+            ("Section 12", "Training", "What are the training pay rules?"),
+            ("Section 13", "Hours of Service", "What are the duty time limits?"),
+            ("Section 14", "Scheduling", "How many days off am I guaranteed per month?"),
+            ("Section 15", "Reserve", "What are the different reserve types?"),
+            ("Section 17", "Furlough & Recall", "What are the furlough and recall rules?"),
+        ]
+
+        col_a, col_b = st.columns(2)
+        for i, (section, title, q_text) in enumerate(contract_chapters):
+            with col_a if i < 6 else col_b:
+                if st.button(f"{section} – {title}", key=f"chapter_{i}", use_container_width=True):
+                    st.session_state.pending_question = q_text
+                    st.rerun()
+
+    # ---- PROCESS QUESTION (from form OR starter button) ----
+    active_question = st.session_state.pending_question
+    st.session_state.pending_question = None
+
+    if active_question:
         st.session_state.show_reference = None
 
         # Prominent staged search indicator — visible on mobile and desktop
@@ -3073,7 +3154,7 @@ else:
             show_progress_stage("🔍", "Searching relevant sections…", "Matching your question to contract provisions")
 
             answer, status, response_time = ask_question(
-                question, chunks, embeddings,
+                active_question, chunks, embeddings,
                 openai_client, anthropic_client,
                 st.session_state.selected_contract,
                 airline_name, history
@@ -3082,11 +3163,11 @@ else:
         # Clear the search indicator once answer is ready
         search_placeholder.empty()
 
-        category = classify_question(question)
+        category = classify_question(active_question)
 
         logger = init_logger()
         logger.log_question(
-            question_text=question,
+            question_text=active_question,
             answer_text=answer,
             status=status,
             contract_id=st.session_state.selected_contract,
@@ -3095,7 +3176,7 @@ else:
         )
 
         st.session_state.conversation.append({
-            'question': question,
+            'question': active_question,
             'answer': answer,
             'status': status,
             'category': category,
@@ -3166,6 +3247,12 @@ This is not legal advice."""
                 st.caption("Select all text above → Ctrl+C (or Cmd+C on Mac)")
 
             st.markdown("---")
+
+        # Back button — clears conversation and returns to chapter grid
+        if st.button("← Back to Contract Sections", use_container_width=True):
+            st.session_state.conversation = []
+            st.session_state.show_reference = None
+            st.rerun()
 
     # ---- FOOTER ----
     st.markdown("""
