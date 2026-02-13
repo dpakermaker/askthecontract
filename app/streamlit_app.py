@@ -1789,7 +1789,7 @@ else:
     # ---- MAIN CONTENT ----
     st.markdown(f"""
     <div style="padding:0.6rem 1rem; background:#f1f5f9; border-radius:8px; font-size:0.8rem; color:#475569; margin-bottom:1rem;">
-        Limited to the {airline_name} Pilot Contract (JCBA). Does not reference FAA regulations, company manuals, or other policies.
+        Limited to the {airline_name} Pilot Contract (JCBA). Does not reference FAA regulations, company manuals, or other policies. Page numbers reference the official PDF and may vary on some devices.
     </div>
     """, unsafe_allow_html=True)
 
