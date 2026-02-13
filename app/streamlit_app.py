@@ -3020,20 +3020,29 @@ else:
     if submit_button and question:
         st.session_state.show_reference = None
 
-        # Prominent search indicator — visible on mobile and desktop
+        # Prominent staged search indicator — visible on mobile and desktop
         search_placeholder = st.empty()
-        search_placeholder.markdown("""
-        <div style="padding:1.25rem 1.5rem; background:#eff6ff; border:2px solid #bfdbfe; border-radius:12px; text-align:center; margin:1rem 0;">
-            <div style="font-size:1.5rem; margin-bottom:0.4rem;">🔍</div>
-            <div style="font-size:1rem; font-weight:600; color:#1e40af;">Searching your contract…</div>
-            <div style="font-size:0.82rem; color:#3b82f6; margin-top:0.25rem;">This may take up to 30 seconds for complex questions</div>
-        </div>
-        """, unsafe_allow_html=True)
+
+        def show_progress_stage(emoji, title, subtitle=""):
+            subtitle_html = f'<div style="font-size:0.82rem; color:#3b82f6; margin-top:0.25rem;">{subtitle}</div>' if subtitle else ""
+            search_placeholder.markdown(f"""
+            <div style="padding:1.25rem 1.5rem; background:#eff6ff; border:2px solid #bfdbfe; border-radius:12px; text-align:center; margin:1rem 0;">
+                <div style="font-size:1.5rem; margin-bottom:0.4rem;">{emoji}</div>
+                <div style="font-size:1rem; font-weight:600; color:#1e40af;">{title}</div>
+                {subtitle_html}
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Stage 1: Loading contract data
+        show_progress_stage("📂", "Loading contract data…")
 
         with st.spinner(""):
             chunks, embeddings = load_contract(st.session_state.selected_contract)
             openai_client, anthropic_client = init_clients()
             history = st.session_state.conversation if st.session_state.conversation else None
+
+            # Stage 2: Searching relevant sections
+            show_progress_stage("🔍", "Searching relevant sections…", "Matching your question to contract provisions")
 
             answer, status, response_time = ask_question(
                 question, chunks, embeddings,
@@ -3082,7 +3091,10 @@ else:
 
             # FEATURE 2: Canonical Question Label
             category = qa.get('category', classify_question(qa['question']))
-            st.caption(f"📂 {category}  •  ⏱️ {qa.get('response_time', '?')}s")
+            answer_text = qa.get('answer', '')
+            provision_count = max(answer_text.count('CITE:') + answer_text.count('📍'), answer_text.count('📄'))
+            provision_label = f"  •  📄 {provision_count} provision{'s' if provision_count != 1 else ''}" if provision_count > 0 else ""
+            st.caption(f"📂 {category}  •  ⏱️ {qa.get('response_time', '?')}s{provision_label}")
 
             # Answer with status color
             if qa['status'] == 'CLEAR':
