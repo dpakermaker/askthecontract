@@ -209,10 +209,63 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ============================================================
+# CACHE REVIEW HELPER
+# ============================================================
+def _render_admin_entry(entry, contract_id, cache, is_flagged=False, compact=False):
+    """Render a single cache entry with action buttons."""
+    flag_icon = f"🚩×{entry.get('thumbs_down', 0)} " if entry.get('thumbs_down', 0) > 0 else ""
+    served = f"served {entry.get('serve_count', 0)}×" if entry.get('serve_count', 0) > 0 else "never served"
+    reviewed_icon = " ✅" if entry.get('reviewed', 0) else ""
+    q_short = entry['question'][:70] + ('...' if len(entry['question']) > 70 else '')
+    label = f"{flag_icon}📂 {entry['category'] or 'Uncategorized'}  ·  {served}{reviewed_icon}  ·  {q_short}"
+
+    with st.expander(label, expanded=is_flagged):
+        st.markdown(f"**Question:** {entry['question']}")
+        st.caption(f"Status: {entry['status']}  ·  Cached: {entry['created_at']}  ·  Served: {entry.get('serve_count', 0)}×  ·  👎: {entry.get('thumbs_down', 0)}  ·  ID: {entry['id']}")
+
+        # Show pilot feedback if flagged
+        if entry.get('thumbs_down', 0) > 0:
+            feedback = cache.get_feedback(entry['question'], contract_id)
+            if feedback:
+                st.markdown("**Pilot Feedback:**")
+                for fb in feedback:
+                    st.markdown(f"""
+                    <div style="padding:0.5rem 0.75rem; background:#fef3c7; border-left:3px solid #f59e0b; border-radius:4px; margin:0.25rem 0; font-size:0.85rem;">
+                        💬 "{fb['comment']}" <span style="color:#9ca3af; font-size:0.75rem;">— {fb['created_at']}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.caption("👎 flagged but no comment left")
+
+        if not compact:
+            if entry['status'] == 'CLEAR':
+                st.success(entry['answer'])
+            elif entry['status'] == 'AMBIGUOUS':
+                st.warning(entry['answer'])
+            else:
+                st.info(entry['answer'])
+        else:
+            truncated = entry['answer'][:500] + ('...' if len(entry['answer']) > 500 else '')
+            st.text(truncated)
+
+        col_del, col_ok, col_spacer = st.columns([1, 1, 2])
+        with col_del:
+            if st.button("🗑️ Delete", key=f"adm_del_{entry['id']}"):
+                cache.delete_entry(entry['id'], contract_id)
+                st.rerun()
+        with col_ok:
+            if not entry.get('reviewed', 0):
+                if st.button("✅ Approve", key=f"adm_ok_{entry['id']}"):
+                    cache.mark_reviewed(entry['id'])
+                    st.rerun()
+            else:
+                st.caption("✅ Reviewed")
+
+# ============================================================
 # TABS
 # ============================================================
 tab_questions, tab_cache, tab_satisfaction, tab_logs, tab_export = st.tabs([
-    "Questions", "Cache", "Satisfaction", "Logs", "Export"
+    "Questions", "Cache Review", "Satisfaction", "Logs", "Export"
 ])
 
 # ── QUESTIONS TAB ──
@@ -249,10 +302,8 @@ with tab_questions:
         else:
             st.caption("No ambiguous answers recorded ✓")
 
-# ── CACHE TAB ──
+# ── CACHE REVIEW TAB ──
 with tab_cache:
-    st.caption("Clear cached answers by category. Use when you deploy code changes, add LOAs/MOAs, or onboard a new contract.")
-
     try:
         from cache_manager import get_semantic_cache
         cache = get_semantic_cache()
@@ -268,34 +319,92 @@ with tab_cache:
         c3.metric("Turso", turso_str)
 
         if not cache_stats['turso_connected']:
-            st.info("💡 **Cache data lives in Turso Cloud.** You're running locally without Turso credentials, so cache shows empty. Deploy to Railway and check askthecontract.com/admin to see your real cached answers and clear by category.")
-        elif category_stats:
-            st.markdown("")
-            st.markdown("**Cached Answers by Category**")
-            for cat, count in sorted(category_stats.items(), key=lambda x: x[1], reverse=True):
-                pct = count / max(contract_total, 1) * 100
-                st.progress(pct / 100, text=f"{cat}: {count}")
-
-            st.markdown("---")
-            clear_options = ["Select a category..."] + sorted(category_stats.keys()) + ["⚠️ ALL CATEGORIES"]
-            clear_choice = st.selectbox("Clear cache for:", clear_options)
-
-            if clear_choice and clear_choice != "Select a category...":
-                if clear_choice == "⚠️ ALL CATEGORIES":
-                    st.warning(f"This will delete all {contract_total} cached answers for {selected}.")
-                    if st.button("Clear All Cached Answers", type="primary"):
-                        cache.clear(contract_id=selected)
-                        st.success(f"Cleared {contract_total} cached answers.")
-                        st.rerun()
-                else:
-                    count = category_stats.get(clear_choice, 0)
-                    st.info(f"This will delete {count} cached answers in **{clear_choice}**. Other categories stay warm.")
-                    if st.button(f"Clear {clear_choice}", type="primary"):
-                        removed = cache.clear_category(selected, clear_choice)
-                        st.success(f"Cleared {removed} cached answers.")
-                        st.rerun()
+            st.info("💡 **Cache data lives in Turso Cloud.** You're running locally without Turso credentials, so cache shows empty. Deploy to Railway and check askthecontract.com/admin to see your real cached answers.")
         else:
-            st.caption("No cached answers for this contract yet. Cache populates as pilots ask questions.")
+            # Load all entries for review
+            all_entries = cache.get_all_entries(selected)
+
+            if all_entries:
+                # Split into groups
+                flagged = [e for e in all_entries if e.get('thumbs_down', 0) > 0]
+                high_impact = [e for e in all_entries if e.get('thumbs_down', 0) == 0 and e.get('reviewed', 0) == 0]
+                high_impact.sort(key=lambda x: x.get('serve_count', 0), reverse=True)
+                reviewed_count = sum(1 for e in all_entries if e.get('reviewed', 0) == 1 and e.get('thumbs_down', 0) == 0)
+
+                # Review summary
+                st.markdown(
+                    f"**🚩 {len(flagged)}** flagged by pilots  ·  "
+                    f"**📊 {len(high_impact)}** unreviewed  ·  "
+                    f"**✅ {reviewed_count}** approved"
+                )
+
+                st.markdown("---")
+
+                # ---- FLAGGED BY PILOTS ----
+                if flagged:
+                    st.markdown(f"### 🚩 Flagged by Pilots ({len(flagged)})")
+                    st.caption("These got 👎 — review the answer, read pilot feedback, delete bad ones")
+                    for entry in flagged:
+                        _render_admin_entry(entry, selected, cache, is_flagged=True)
+                else:
+                    st.success("🚩 No flagged answers — pilots haven't reported any problems.")
+
+                st.markdown("---")
+
+                # ---- HIGH IMPACT UNREVIEWED ----
+                if high_impact:
+                    show_count = min(10, len(high_impact))
+                    st.markdown(f"### 📊 High-Impact Unreviewed (top {show_count} of {len(high_impact)})")
+                    st.caption("Most-served answers you haven't checked yet")
+                    for entry in high_impact[:show_count]:
+                        _render_admin_entry(entry, selected, cache, is_flagged=False)
+                    st.markdown("---")
+
+                # ---- BROWSE ALL ----
+                with st.expander(f"📋 Browse All Cached Answers ({len(all_entries)})", expanded=False):
+                    if category_stats:
+                        filter_cats = ["All"] + sorted(category_stats.keys())
+                        selected_cat = st.selectbox("Filter by category:", filter_cats, key="admin_cache_browse")
+                        if selected_cat != "All":
+                            browse = [e for e in all_entries if e['category'] == selected_cat]
+                        else:
+                            browse = all_entries
+                    else:
+                        browse = all_entries
+
+                    for entry in browse:
+                        _render_admin_entry(entry, selected, cache, is_flagged=False, compact=True)
+
+                st.markdown("---")
+
+                # ---- BULK CLEAR BY CATEGORY ----
+                st.markdown("### 🗑️ Clear by Category")
+                st.caption("Use when you deploy code changes, add LOAs/MOAs, or fix retrieval rules.")
+
+                if category_stats:
+                    for cat, count in sorted(category_stats.items(), key=lambda x: x[1], reverse=True):
+                        pct = count / max(contract_total, 1) * 100
+                        st.progress(pct / 100, text=f"{cat}: {count}")
+
+                    clear_options = ["Select a category..."] + sorted(category_stats.keys()) + ["⚠️ ALL CATEGORIES"]
+                    clear_choice = st.selectbox("Clear cache for:", clear_options, key="admin_cache_clear")
+
+                    if clear_choice and clear_choice != "Select a category...":
+                        if clear_choice == "⚠️ ALL CATEGORIES":
+                            st.warning(f"This will delete all {contract_total} cached answers for {selected}.")
+                            if st.button("Clear All Cached Answers", type="primary"):
+                                cache.clear(contract_id=selected)
+                                st.success(f"Cleared {contract_total} cached answers.")
+                                st.rerun()
+                        else:
+                            count = category_stats.get(clear_choice, 0)
+                            st.info(f"This will delete {count} cached answers in **{clear_choice}**. Other categories stay warm.")
+                            if st.button(f"Clear {clear_choice}", type="primary"):
+                                removed = cache.clear_category(selected, clear_choice)
+                                st.success(f"Cleared {removed} cached answers.")
+                                st.rerun()
+            else:
+                st.caption("No cached answers for this contract yet. Cache populates as pilots ask questions.")
 
     except Exception as e:
         st.warning(f"Cache management unavailable: {e}")

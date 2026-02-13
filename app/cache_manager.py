@@ -87,13 +87,24 @@ class SemanticCache:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )""",
                 "CREATE INDEX IF NOT EXISTS idx_cache_contract ON answer_cache(contract_id)",
-                # Add category column if it doesn't exist (safe for existing databases)
+                # Add columns if they don't exist (safe for existing databases)
                 "ALTER TABLE answer_cache ADD COLUMN category TEXT DEFAULT ''",
+                "ALTER TABLE answer_cache ADD COLUMN thumbs_down INTEGER DEFAULT 0",
+                "ALTER TABLE answer_cache ADD COLUMN serve_count INTEGER DEFAULT 0",
+                "ALTER TABLE answer_cache ADD COLUMN reviewed INTEGER DEFAULT 0",
                 # Metadata table for tracking cache-invalidation keys (e.g. PAY_INCREASES)
                 """CREATE TABLE IF NOT EXISTS cache_metadata (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )""",
+                # Pilot feedback on cached answers (separate table — multiple comments per answer)
+                """CREATE TABLE IF NOT EXISTS cache_feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    contract_id TEXT NOT NULL,
+                    question TEXT NOT NULL,
+                    comment TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )""",
             ])
             if result:
@@ -167,6 +178,7 @@ class SemanticCache:
             entries = self._entries.get(contract_id, [])
             best_score = 0
             best_result = None
+            best_question = None
             for cached_emb, cached_q, cached_answer, cached_status, cached_time, cached_cat in entries:
                 score = np.dot(embedding, cached_emb) / (
                     np.linalg.norm(embedding) * np.linalg.norm(cached_emb)
@@ -174,7 +186,21 @@ class SemanticCache:
                 if score > self.SIMILARITY_THRESHOLD and score > best_score:
                     best_score = score
                     best_result = (cached_answer, cached_status, cached_time)
-            return best_result
+                    best_question = cached_q
+        # Increment serve_count in Turso (fire and forget)
+        if best_result and best_question and self._turso_available:
+            try:
+                stmt = {
+                    "sql": "UPDATE answer_cache SET serve_count = serve_count + 1 WHERE contract_id = ? AND question = ?",
+                    "args": [
+                        {"type": "text", "value": contract_id},
+                        {"type": "text", "value": best_question},
+                    ]
+                }
+                self._turso_request([stmt])
+            except Exception:
+                pass  # Non-critical — don't break cache hits
+        return best_result
 
     def store(self, embedding, question, answer, status, response_time, contract_id, category=""):
         embedding = np.array(embedding, dtype=np.float32)
@@ -257,6 +283,173 @@ class SemanticCache:
             'turso_connected': self._turso_available,
             'contracts': {k: len(v) for k, v in self._entries.items()}
         }
+
+    def get_all_entries(self, contract_id):
+        """Return all cached entries for a contract from Turso with IDs for admin review.
+        Returns list of dicts sorted by: flagged first, then highest serve_count.
+        """
+        if not self._turso_available:
+            with self._lock:
+                entries = self._entries.get(contract_id, [])
+                return [
+                    {'id': i, 'question': e[1], 'answer': e[2], 'status': e[3],
+                     'category': e[5], 'created_at': 'unknown', 'thumbs_down': 0,
+                     'serve_count': 0, 'reviewed': 0}
+                    for i, e in enumerate(entries)
+                ]
+        try:
+            stmt = {
+                "sql": "SELECT id, question, answer, status, category, created_at, COALESCE(thumbs_down, 0), COALESCE(serve_count, 0), COALESCE(reviewed, 0) FROM answer_cache WHERE contract_id = ? ORDER BY thumbs_down DESC, serve_count DESC",
+                "args": [{"type": "text", "value": contract_id}]
+            }
+            result = self._turso_request([stmt])
+            if not result or 'results' not in result:
+                return []
+            select_result = result['results'][0]
+            if select_result.get('type') != 'ok':
+                return []
+            rows = select_result['response']['result'].get('rows', [])
+            entries = []
+            for row in rows:
+                entries.append({
+                    'id': int(row[0]['value']),
+                    'question': row[1]['value'],
+                    'answer': row[2]['value'],
+                    'status': row[3]['value'] if row[3]['type'] != 'null' else '',
+                    'category': row[4]['value'] if row[4]['type'] != 'null' else '',
+                    'created_at': row[5]['value'] if row[5]['type'] != 'null' else 'unknown',
+                    'thumbs_down': int(row[6]['value']) if row[6]['type'] != 'null' else 0,
+                    'serve_count': int(row[7]['value']) if row[7]['type'] != 'null' else 0,
+                    'reviewed': int(row[8]['value']) if row[8]['type'] != 'null' else 0,
+                })
+            return entries
+        except Exception as e:
+            print(f"[Cache] Failed to get all entries: {e}")
+            return []
+
+    def delete_entry(self, entry_id, contract_id):
+        """Delete a single cached entry by Turso ID. Also removes from memory."""
+        # Remove from Turso
+        if self._turso_available:
+            try:
+                # Get the question text first so we can remove from memory
+                stmt_select = {
+                    "sql": "SELECT question FROM answer_cache WHERE id = ?",
+                    "args": [{"type": "integer", "value": str(entry_id)}]
+                }
+                result = self._turso_request([stmt_select])
+                question_text = None
+                if result and 'results' in result:
+                    select_result = result['results'][0]
+                    if select_result.get('type') == 'ok':
+                        rows = select_result['response']['result'].get('rows', [])
+                        if rows:
+                            question_text = rows[0][0]['value']
+
+                stmt_delete = {
+                    "sql": "DELETE FROM answer_cache WHERE id = ?",
+                    "args": [{"type": "integer", "value": str(entry_id)}]
+                }
+                self._turso_request([stmt_delete])
+
+                # Remove from memory by matching question text
+                if question_text:
+                    with self._lock:
+                        entries = self._entries.get(contract_id, [])
+                        self._entries[contract_id] = [
+                            e for e in entries if e[1] != question_text
+                        ]
+                print(f"[Cache] Deleted entry {entry_id}: {question_text[:50] if question_text else 'unknown'}...")
+                return True
+            except Exception as e:
+                print(f"[Cache] Failed to delete entry {entry_id}: {e}")
+                return False
+        return False
+
+    def record_thumbs_down(self, question_text, contract_id):
+        """Increment thumbs_down counter on the cached answer matching this question.
+        Called when a pilot clicks 👎. Uses fuzzy matching via embedding similarity
+        but for simplicity we match on exact question text first."""
+        if not self._turso_available:
+            return False
+        try:
+            stmt = {
+                "sql": "UPDATE answer_cache SET thumbs_down = thumbs_down + 1 WHERE contract_id = ? AND question = ?",
+                "args": [
+                    {"type": "text", "value": contract_id},
+                    {"type": "text", "value": question_text},
+                ]
+            }
+            result = self._turso_request([stmt])
+            if result:
+                print(f"[Cache] Thumbs down recorded for: {question_text[:50]}...")
+                return True
+        except Exception as e:
+            print(f"[Cache] Failed to record thumbs down: {e}")
+        return False
+
+    def mark_reviewed(self, entry_id):
+        """Mark a cached entry as reviewed by admin."""
+        if not self._turso_available:
+            return False
+        try:
+            stmt = {
+                "sql": "UPDATE answer_cache SET reviewed = 1 WHERE id = ?",
+                "args": [{"type": "integer", "value": str(entry_id)}]
+            }
+            self._turso_request([stmt])
+            return True
+        except Exception as e:
+            print(f"[Cache] Failed to mark reviewed: {e}")
+            return False
+
+    def save_feedback(self, question_text, contract_id, comment):
+        """Save a pilot's feedback comment about a cached answer."""
+        if not self._turso_available or not comment.strip():
+            return False
+        try:
+            stmt = {
+                "sql": "INSERT INTO cache_feedback (contract_id, question, comment) VALUES (?, ?, ?)",
+                "args": [
+                    {"type": "text", "value": contract_id},
+                    {"type": "text", "value": question_text},
+                    {"type": "text", "value": comment.strip()},
+                ]
+            }
+            self._turso_request([stmt])
+            print(f"[Cache] Feedback saved for: {question_text[:50]}...")
+            return True
+        except Exception as e:
+            print(f"[Cache] Failed to save feedback: {e}")
+            return False
+
+    def get_feedback(self, question_text, contract_id):
+        """Get all pilot feedback comments for a specific cached question.
+        Returns list of dicts: {comment, created_at}"""
+        if not self._turso_available:
+            return []
+        try:
+            stmt = {
+                "sql": "SELECT comment, created_at FROM cache_feedback WHERE contract_id = ? AND question = ? ORDER BY created_at DESC",
+                "args": [
+                    {"type": "text", "value": contract_id},
+                    {"type": "text", "value": question_text},
+                ]
+            }
+            result = self._turso_request([stmt])
+            if not result or 'results' not in result:
+                return []
+            select_result = result['results'][0]
+            if select_result.get('type') != 'ok':
+                return []
+            rows = select_result['response']['result'].get('rows', [])
+            return [
+                {'comment': row[0]['value'], 'created_at': row[1]['value'] if row[1]['type'] != 'null' else ''}
+                for row in rows
+            ]
+        except Exception as e:
+            print(f"[Cache] Failed to get feedback: {e}")
+            return []
 
     def get_meta(self, key):
         """Retrieve a metadata value from Turso. Returns None if not found."""

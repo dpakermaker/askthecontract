@@ -1903,7 +1903,7 @@ else:
             'response_time': round(response_time, 1)
         })
 
-    # ---- CONVERSATION HISTORY (hidden when QRC is open) ----
+    # ---- CONVERSATION HISTORY (hidden when QRC or cache review is open) ----
     if st.session_state.conversation and not st.session_state.show_reference:
         st.markdown("---")
 
@@ -1938,6 +1938,7 @@ else:
 
             # FEATURE 4: Answer Rating
             rating_key = f"rating_{q_num}"
+            feedback_key = f"feedback_open_{q_num}"
             with col1:
                 if st.button("👍", key=f"up_{q_num}"):
                     log_rating(qa['question'], "up", st.session_state.selected_contract)
@@ -1945,11 +1946,48 @@ else:
             with col2:
                 if st.button("👎", key=f"down_{q_num}"):
                     log_rating(qa['question'], "down", st.session_state.selected_contract)
+                    try:
+                        cache = get_semantic_cache()
+                        cache.record_thumbs_down(qa['question'], st.session_state.selected_contract)
+                    except Exception:
+                        pass
                     st.session_state.ratings[rating_key] = "down"
+                    st.session_state[feedback_key] = True
             with col3:
                 if rating_key in st.session_state.ratings:
                     r = st.session_state.ratings[rating_key]
-                    st.caption("✅ Thanks for your feedback!" if r == "up" else "📝 Thanks — we'll review this answer.")
+                    if r == "up":
+                        st.caption("✅ Thanks for your feedback!")
+
+            # Feedback form (shows after 👎)
+            if st.session_state.get(feedback_key):
+                st.markdown("""
+                <div style="padding:0.75rem 1rem; background:#fef9e7; border:1px solid #f0d36e; border-radius:8px; margin:0.5rem 0;">
+                    <span style="font-size:0.85rem; color:#6b5900; font-weight:600;">Thanks for flagging this — help us fix it</span>
+                </div>
+                """, unsafe_allow_html=True)
+                pilot_comment = st.text_area(
+                    "What's wrong with this answer? (optional)",
+                    placeholder="e.g. Wrong section number, math is off, missing a provision...",
+                    key=f"comment_{q_num}",
+                    max_chars=500,
+                    height=80
+                )
+                if st.button("Submit Feedback", key=f"submit_fb_{q_num}"):
+                    if pilot_comment and pilot_comment.strip():
+                        try:
+                            cache = get_semantic_cache()
+                            cache.save_feedback(qa['question'], st.session_state.selected_contract, pilot_comment)
+                        except Exception:
+                            pass
+                    st.session_state[feedback_key] = False
+                    st.session_state.ratings[rating_key] = "down_submitted"
+                    st.rerun()
+                if st.session_state.ratings.get(rating_key) != "down_submitted":
+                    st.caption("You can also skip this — the 👎 alone helps us find problems.")
+
+            if st.session_state.ratings.get(rating_key) == "down_submitted":
+                st.caption("📝 Thanks — we'll review this answer. Your feedback helps every pilot.")
 
             # FEATURE 5: Copy / Export Answer
             copy_text = f"""Question: {qa['question']}
