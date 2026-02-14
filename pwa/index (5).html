@@ -687,10 +687,15 @@
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.+?)\*/g, '<em>$1</em>')
-        .replace(/^#{1,3}\s+(.+)$/gm, '<strong>$1</strong>')
-        .replace(/^---+$/gm, '<hr style="border:none;border-top:1px solid #334155;margin:12px 0;">')
-        .replace(/^- (.+)$/gm, '• $1')
-        .replace(/\n\n/g, '</p><p style="margin:8px 0;">')
+        .replace(/^#{1,3}\s+(.+)$/gm, '<strong style="font-size:16px;">$1</strong>')
+        .replace(/^---+$/gm, '<hr style="border:none;border-top:1px solid #334155;margin:14px 0;">')
+        .replace(/^- (.+)$/gm, '<div style="padding-left:12px;">• $1</div>')
+        .replace(/📄/g, '<span style="display:block;margin-top:16px;">📄</span>')
+        .replace(/📝/g, '<span style="display:block;margin-top:16px;">📝</span>')
+        .replace(/🔵/g, '<span style="display:block;margin-top:16px;">🔵</span>')
+        .replace(/⚠️/g, '<span style="display:block;margin-top:12px;font-size:13px;color:#94a3b8;">⚠️</span>')
+        .replace(/📍/g, '<br>📍')
+        .replace(/\n\n/g, '</p><p style="margin:10px 0;">')
         .replace(/\n/g, '<br>');
     }
 
@@ -698,40 +703,24 @@
       document.getElementById('results-loading').classList.add('hidden');
       const el = document.getElementById('results-content');
 
-      const status = data.status || data.confidence || 'CLEAR';
+      const status = data.status || 'CLEAR';
       const badgeClass = status === 'CLEAR' ? 'badge-clear' : (status === 'AMBIGUOUS' ? 'badge-ambiguous' : 'badge-not-addressed');
       const badgeText = status === 'CLEAR' ? 'CLEAR' : (status === 'AMBIGUOUS' ? 'AMBIGUOUS' : 'NOT ADDRESSED');
-      const citationCount = data.citations ? data.citations.length : 0;
 
-      let citationsHTML = '';
-      if (data.citations && data.citations.length > 0) {
-        data.citations.forEach((c, i) => {
-          citationsHTML += `
-            <div class="citation-card">
-              <div class="citation-top">
-                <span class="citation-num">${i + 1}</span>
-                <div>
-                  <p class="citation-section">${c.section}</p>
-                  <p class="citation-page">${c.page}</p>
-                </div>
-              </div>
-              ${c.text ? '<div class="citation-quote">' + renderMarkdown(c.text) + '</div>' : ''}
-            </div>`;
-        });
-      }
+      // Use raw_answer if available (full Claude response), otherwise fall back to parsed answer
+      const displayAnswer = data.raw_answer || data.answer;
 
       el.innerHTML = `
         <div class="answer-card">
           <div class="badge-row">
             <span class="badge ${badgeClass}">${badgeText}</span>
-            <span class="citation-count">${citationCount} citation${citationCount !== 1 ? 's' : ''} found</span>
+            ${data.cached ? '<span class="citation-count">⚡ Cached</span>' : ''}
+            ${data.response_time ? '<span class="citation-count">' + data.response_time + 's</span>' : ''}
           </div>
-          <div class="answer-text"><p style="margin:8px 0;">${renderMarkdown(data.answer)}</p></div>
+          <div class="answer-text" style="font-size:15px;line-height:1.75;">
+            <p style="margin:10px 0;">${renderMarkdown(displayAnswer)}</p>
+          </div>
         </div>
-        ${citationCount > 0 ? `<div class="citations-section">
-          <p class="citations-label">Contract Citations</p>
-          ${citationsHTML}
-        </div>` : ''}
         <div class="action-row" style="margin-bottom:20px;">
           <button class="action-btn" id="btn-up" onclick="setFeedback('up')">👍 Accurate</button>
           <button class="action-btn" id="btn-down" onclick="setFeedback('down')">👎 Issue</button>
@@ -742,11 +731,6 @@
             </svg>
             Copy All
           </button>
-        </div>
-        <div class="disclaimer">
-          <strong>Disclaimer:</strong> This tool searches contract language to help you find relevant sections.
-          It is not a legal interpretation. Always verify answers against your physical contract and consult
-          your union representative for official guidance.
         </div>`;
 
       el.classList.remove('hidden');

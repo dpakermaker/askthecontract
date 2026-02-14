@@ -146,6 +146,7 @@ class SearchResponse(BaseModel):
     response_time: float
     cached: bool
     model_tier: Optional[str] = None
+    raw_answer: Optional[str] = None
 
 
 # ============================================================
@@ -249,6 +250,7 @@ async def search(req: SearchRequest):
         response_time=round(time.time() - start_time, 2),
         cached=cached,
         model_tier=model_tier,
+        raw_answer=answer,
     )
 
 
