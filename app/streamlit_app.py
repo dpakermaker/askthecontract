@@ -28,28 +28,25 @@ st.set_page_config(
     layout="wide"
 )
 
-# ── AUTH GATE ──────────────────────────────────
-# Show landing page if not logged in
+# ── Auth gate — must log in before seeing the app ──
 if not show_landing_page():
     st.stop()
-# If we get here, user is authenticated
-# ───────────────────────────────────────────────
 
 # ============================================================
-# PROFESSIONAL CSS THEME
+# PROFESSIONAL CSS THEME — Matches landing page design
 # ============================================================
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
     /* ── Global typography ── */
     html, body, [class*="css"] {
-        font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    /* ── Page background ── */
+    /* ── Page background — warm gradient matching landing page ── */
     .stApp {
-        background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+        background: linear-gradient(170deg, #F8FAFC 0%, #F1F5F9 40%, #EFF6FF 100%) !important;
     }
 
     /* ── Hide Streamlit chrome ── */
@@ -63,7 +60,9 @@ st.markdown("""
         max-width: 900px;
     }
 
-    /* ── Sidebar ── */
+    /* ══════════════════════════════════════════
+       SIDEBAR — dark, clean
+       ══════════════════════════════════════════ */
     [data-testid="stSidebar"] {
         background: #0f172a;
         border-right: none;
@@ -93,12 +92,12 @@ st.markdown("""
         color: #e2e8f0;
         border: 1px solid #334155;
         border-radius: 8px;
-        font-family: 'DM Sans', sans-serif;
+        font-family: 'Inter', sans-serif;
         font-weight: 500;
         font-size: 0.85rem;
-        transition: all 0.15s ease;
+        transition: all 0.2s ease;
         text-align: left;
-        padding: 0.5rem 0.75rem;
+        padding: 0.55rem 0.75rem;
     }
     [data-testid="stSidebar"] .stButton > button:hover {
         background: #334155;
@@ -118,46 +117,98 @@ st.markdown("""
         letter-spacing: 0.05em !important;
     }
 
-    /* ── Main content inputs ── */
+    /* ══════════════════════════════════════════
+       MAIN CONTENT — inputs, buttons, cards
+       ══════════════════════════════════════════ */
+
+    /* ── Text inputs ── */
     .stTextInput > div > div > input {
-        font-family: 'DM Sans', sans-serif;
-        font-size: 0.95rem;
-        border-radius: 10px;
-        border: 2px solid #e2e8f0;
-        padding: 0.75rem 1rem;
-        transition: border-color 0.15s ease;
+        font-family: 'Inter', sans-serif;
+        font-size: 0.92rem;
+        border-radius: 8px;
+        border: 1.5px solid #CBD5E1;
+        background: #F8FAFC;
+        padding: 0.7rem 0.9rem;
+        color: #0F172A;
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+        transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
     }
     .stTextInput > div > div > input:focus {
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        background: #FFFFFF;
+        border-color: #3B82F6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12),
+                    inset 0 1px 2px rgba(0, 0, 0, 0.02);
+    }
+    .stTextInput > div > div > input::placeholder {
+        color: #94A3B8;
     }
     .stTextInput label {
-        font-family: 'DM Sans', sans-serif;
-        font-weight: 600;
-        color: #334155;
-        font-size: 0.9rem;
+        font-family: 'Inter', sans-serif;
+        font-weight: 500;
+        color: #1E293B;
+        font-size: 0.88rem;
     }
 
-    /* ── Primary button ── */
+    /* ── Primary button (Ask) — brand blue ── */
     .stFormSubmitButton > button,
     button[kind="primary"] {
-        font-family: 'DM Sans', sans-serif;
-        font-weight: 600;
-        border-radius: 10px;
-        padding: 0.6rem 1.5rem;
-        font-size: 0.9rem;
-        letter-spacing: 0.01em;
+        font-family: 'Inter', sans-serif !important;
+        font-weight: 600 !important;
+        border-radius: 8px !important;
+        padding: 0.7rem 1.5rem !important;
+        font-size: 0.9rem !important;
+        letter-spacing: -0.01em !important;
+        background: #2563EB !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3),
+                    0 2px 6px rgba(37, 99, 235, 0.15) !important;
+        transition: all 0.2s ease !important;
+    }
+    .stFormSubmitButton > button:hover,
+    button[kind="primary"]:hover {
+        background: #1D4ED8 !important;
+        box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3),
+                    0 6px 16px rgba(37, 99, 235, 0.2) !important;
+        transform: translateY(-1px) !important;
+    }
+    .stFormSubmitButton > button:active,
+    button[kind="primary"]:active {
+        background: #1E40AF !important;
+        transform: translateY(0) !important;
+        box-shadow: 0 1px 2px rgba(37, 99, 235, 0.3) !important;
+    }
+
+    /* ── Section explore buttons ── */
+    .stButton > button {
+        font-family: 'Inter', sans-serif;
+        border-radius: 8px;
+        border: 1px solid #E2E8F0;
+        background: #FFFFFF;
+        color: #334155;
+        font-weight: 500;
+        font-size: 0.86rem;
+        padding: 0.6rem 0.75rem;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+        transition: all 0.2s ease;
+    }
+    .stButton > button:hover {
+        border-color: #CBD5E1;
+        background: #F8FAFC;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+        color: #0F172A;
     }
 
     /* ── Answer boxes ── */
     [data-testid="stAlert"] {
         border-radius: 10px;
-        font-family: 'DM Sans', sans-serif;
-        line-height: 1.65;
-        font-size: 0.9rem;
+        font-family: 'Inter', sans-serif;
+        line-height: 1.7;
+        font-size: 0.88rem;
         border-left-width: 4px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
     }
-    /* Cap heading sizes inside answers — safety net */
+    /* Cap heading sizes inside answers */
     [data-testid="stAlert"] h1 {
         font-size: 1rem !important;
         font-weight: 700 !important;
@@ -176,35 +227,72 @@ st.markdown("""
 
     /* ── Expanders ── */
     .streamlit-expanderHeader {
-        font-family: 'DM Sans', sans-serif;
+        font-family: 'Inter', sans-serif;
         font-weight: 500;
         font-size: 0.85rem;
-        color: #64748b;
+        color: #64748B;
+    }
+    .stExpander {
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 10px !important;
+        background: #FFFFFF !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
+        transition: border-color 0.2s ease !important;
+    }
+    .stExpander:hover {
+        border-color: #CBD5E1 !important;
+    }
+    .stExpander:focus-within,
+    .stExpander:focus,
+    .stExpander:active,
+    .stExpander details:focus,
+    .stExpander details:active,
+    .stExpander details[open] {
+        border-color: #E2E8F0 !important;
+        outline: none !important;
+    }
+    .stExpander summary:focus {
+        outline: none !important;
+        box-shadow: none !important;
     }
 
-    /* ── General buttons ── */
-    .stButton > button {
-        font-family: 'DM Sans', sans-serif;
-        border-radius: 8px;
+    /* ── Form containers ── */
+    [data-testid="stForm"] {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 12px;
+        padding: 1.25rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 6px rgba(0,0,0,0.02);
     }
 
     /* ── Markdown headings ── */
     .stMarkdown h3 {
-        font-family: 'DM Sans', sans-serif;
+        font-family: 'Inter', sans-serif;
         font-weight: 700;
-        color: #0f172a;
+        color: #0F172A;
         font-size: 1.05rem;
-        letter-spacing: -0.01em;
+        letter-spacing: -0.02em;
     }
 
     /* ── Captions ── */
     .stCaption, [data-testid="stCaptionContainer"] {
-        font-family: 'DM Sans', sans-serif;
+        font-family: 'Inter', sans-serif;
+        color: #94A3B8;
     }
 
     /* ── Spinner ── */
     .stSpinner > div {
-        font-family: 'DM Sans', sans-serif;
+        font-family: 'Inter', sans-serif;
+    }
+
+    /* ── Thumbs up/down feedback buttons ── */
+    .stButton > button:has(> div:only-child) {
+        padding: 0.35rem 0.75rem;
+    }
+
+    /* ── Horizontal rule ── */
+    hr {
+        border-color: #E2E8F0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -1735,10 +1823,14 @@ if not st.session_state.authenticated:
 else:
     st.markdown("""
     <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.25rem;">
-        <span style="font-size:1.4rem; font-weight:700; color:#0f172a; letter-spacing:-0.02em;">✈️ AskTheContract</span>
+        <span style="font-family:'Inter',sans-serif; font-size:1.4rem; font-weight:700; color:#0F172A; letter-spacing:-0.02em;">✈️ <span style="color:#2563EB;">Ask</span>TheContract</span>
     </div>
     """, unsafe_allow_html=True)
-    st.caption("Search and retrieve exact contract language with page and section references.")
+    st.markdown("""
+    <div style="font-family:'Inter',sans-serif; font-size:0.86rem; color:#64748B; font-weight:400; margin-bottom:0.5rem;">
+        Search and retrieve exact contract language with page and section references.
+    </div>
+    """, unsafe_allow_html=True)
 
     # ---- SIDEBAR ----
     with st.sidebar:
@@ -1748,7 +1840,6 @@ else:
         </div>
         """, unsafe_allow_html=True)
 
-        # Logged-in user info + logout
         show_logout_button()
 
         st.markdown("---")
@@ -1799,7 +1890,7 @@ else:
 
     # ---- MAIN CONTENT ----
     st.markdown(f"""
-    <div style="padding:0.6rem 1rem; background:#f1f5f9; border-radius:8px; font-size:0.8rem; color:#475569; margin-bottom:1rem;">
+    <div style="padding:0.65rem 1rem; background:#F1F5F9; border-radius:8px; font-family:'Inter',sans-serif; font-size:0.78rem; color:#64748B; margin-bottom:1rem; line-height:1.55;">
         Limited to the {airline_name} Pilot Contract (JCBA). Does not reference FAA regulations, company manuals, or other policies. Page numbers reference the official PDF and may vary on some devices.
     </div>
     """, unsafe_allow_html=True)
@@ -1864,11 +1955,11 @@ else:
         search_placeholder = st.empty()
 
         def show_progress_stage(emoji, title, subtitle=""):
-            subtitle_html = f'<div style="font-size:0.82rem; color:#3b82f6; margin-top:0.25rem;">{subtitle}</div>' if subtitle else ""
+            subtitle_html = f'<div style="font-family:Inter,sans-serif; font-size:0.82rem; color:#3B82F6; margin-top:0.25rem;">{subtitle}</div>' if subtitle else ""
             search_placeholder.markdown(f"""
-            <div style="padding:1.25rem 1.5rem; background:#eff6ff; border:2px solid #bfdbfe; border-radius:12px; text-align:center; margin:1rem 0;">
+            <div style="padding:1.25rem 1.5rem; background:#EFF6FF; border:1.5px solid #BFDBFE; border-radius:12px; text-align:center; margin:1rem 0; box-shadow:0 1px 3px rgba(37,99,235,0.08);">
                 <div style="font-size:1.5rem; margin-bottom:0.4rem;">{emoji}</div>
-                <div style="font-size:1rem; font-weight:600; color:#1e40af;">{title}</div>
+                <div style="font-family:'Inter',sans-serif; font-size:1rem; font-weight:600; color:#1E40AF;">{title}</div>
                 {subtitle_html}
             </div>
             """, unsafe_allow_html=True)
@@ -2025,7 +2116,9 @@ This is not legal advice."""
 
     # ---- FOOTER ----
     st.markdown("""
-    <div style="text-align:center; padding:1rem 0; font-size:0.75rem; color:#94a3b8;">
-        AskTheContract · Exact contract language, not legal advice
+    <div style="text-align:center; padding:1.5rem 0 1rem; margin-top:1rem; border-top:1px solid #E2E8F0;">
+        <span style="font-family:'Inter',sans-serif; font-size:0.72rem; color:#94A3B8;">
+            AskTheContract · Exact contract language, not legal advice
+        </span>
     </div>
     """, unsafe_allow_html=True)
