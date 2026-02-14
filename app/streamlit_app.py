@@ -1874,18 +1874,12 @@ else:
             if st.button(f"{card_data['icon']} {card_name}", key=f"ref_{card_name}", use_container_width=True):
                 st.session_state.show_reference = card_name
                 st.session_state.show_analytics = False
+                st.rerun()
 
         st.markdown("---")
         if st.button("🔥 Most Asked", use_container_width=True):
             st.session_state.show_analytics = not st.session_state.show_analytics
             st.session_state.show_reference = None
-            st.rerun()
-        if st.button("🗑️ Clear Chat", use_container_width=True):
-            st.session_state.conversation = []
-            st.session_state.show_reference = None
-            st.rerun()
-        if st.button("🚪 Sign Out", use_container_width=True):
-            st.session_state.authenticated = False
             st.rerun()
 
     # ---- MAIN CONTENT ----
@@ -1898,9 +1892,26 @@ else:
     # Show Quick Reference Card if selected
     if st.session_state.show_reference:
         import streamlit.components.v1 as components
-        components.html("""<script>
-            var main = window.parent.document.querySelector('section.main');
-            if (main) main.scrollTo({top: 0, behavior: 'instant'});
+        _t = time.time()
+        components.html(f"""<script>
+            /* {_t} */
+            function scrollUp() {{
+                var targets = [
+                    window.parent.document.querySelector('section.main'),
+                    window.parent.document.querySelector('[data-testid="stAppViewContainer"]'),
+                    window.parent.document.querySelector('[data-testid="stMain"]'),
+                    window.parent.document.querySelector('.main'),
+                    window.parent.document.documentElement
+                ];
+                for (var i = 0; i < targets.length; i++) {{
+                    if (targets[i]) targets[i].scrollTop = 0;
+                }}
+                window.parent.scrollTo(0, 0);
+            }}
+            scrollUp();
+            setTimeout(scrollUp, 50);
+            setTimeout(scrollUp, 150);
+            setTimeout(scrollUp, 300);
         </script>""", height=0)
         card = QUICK_REFERENCE_CARDS[st.session_state.show_reference]
         st.markdown(card['content'])
@@ -1911,6 +1922,28 @@ else:
 
     # Show Analytics Dashboard if selected
     if st.session_state.show_analytics:
+        import streamlit.components.v1 as components
+        _t = time.time()
+        components.html(f"""<script>
+            /* {_t} */
+            function scrollUp() {{
+                var targets = [
+                    window.parent.document.querySelector('section.main'),
+                    window.parent.document.querySelector('[data-testid="stAppViewContainer"]'),
+                    window.parent.document.querySelector('[data-testid="stMain"]'),
+                    window.parent.document.querySelector('.main'),
+                    window.parent.document.documentElement
+                ];
+                for (var i = 0; i < targets.length; i++) {{
+                    if (targets[i]) targets[i].scrollTop = 0;
+                }}
+                window.parent.scrollTo(0, 0);
+            }}
+            scrollUp();
+            setTimeout(scrollUp, 50);
+            setTimeout(scrollUp, 150);
+            setTimeout(scrollUp, 300);
+        </script>""", height=0)
         render_analytics_dashboard()
         if st.button("✖ Close"):
             st.session_state.show_analytics = False
@@ -2007,6 +2040,28 @@ else:
 
     # ---- CONVERSATION HISTORY (hidden when QRC or cache review is open) ----
     if st.session_state.conversation and not st.session_state.show_reference:
+        import streamlit.components.v1 as components
+        _t = time.time()
+        components.html(f"""<script>
+            /* {_t} */
+            function scrollUp() {{
+                var targets = [
+                    window.parent.document.querySelector('section.main'),
+                    window.parent.document.querySelector('[data-testid="stAppViewContainer"]'),
+                    window.parent.document.querySelector('[data-testid="stMain"]'),
+                    window.parent.document.querySelector('.main'),
+                    window.parent.document.documentElement
+                ];
+                for (var i = 0; i < targets.length; i++) {{
+                    if (targets[i]) targets[i].scrollTop = 0;
+                }}
+                window.parent.scrollTo(0, 0);
+            }}
+            scrollUp();
+            setTimeout(scrollUp, 50);
+            setTimeout(scrollUp, 150);
+            setTimeout(scrollUp, 300);
+        </script>""", height=0)
         st.markdown("---")
 
         for i, qa in enumerate(reversed(st.session_state.conversation)):
@@ -2092,17 +2147,25 @@ else:
                 st.caption("📝 Thanks — we'll review this answer. Your feedback helps every pilot.")
 
             # FEATURE 5: Copy / Export Answer
-            copy_text = f"""Question: {qa['question']}
-Category: {category}
-Status: {qa['status']}
+            # Clean, shareable format with branding
+            copy_text = f"""━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  AskTheContract — {airline_name} JCBA
+  askthecontract.com
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+QUESTION: {qa['question']}
+
+STATUS: {qa['status']}
 
 {qa['answer']}
 
----
-Generated by AskTheContract | {airline_name} JCBA
-This is not legal advice."""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This is a contract language reference, not legal advice.
+Verify all language against your official JCBA document.
+askthecontract.com — Built by a line pilot, for line pilots.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
-            with st.expander("📋 Copy / Export Answer"):
+            with st.expander("📋 Copy / Share Answer"):
                 st.code(copy_text, language=None)
                 st.caption("Select all text above → Ctrl+C (or Cmd+C on Mac)")
 
