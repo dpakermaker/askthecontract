@@ -970,9 +970,11 @@ FORMATTING: Use **bold** for labels, no markdown headings (#). No $ signs. Keep 
     answer = message.content[0].text
     response_time = time.time() - start_time
 
-    if '🔵 STATUS: CLEAR' in answer:
+    # Strip markdown bold for status detection
+    answer_clean = answer.replace('**', '')
+    if 'STATUS: CLEAR' in answer_clean or 'STATUS:**CLEAR' in answer:
         status = 'CLEAR'
-    elif '🔵 STATUS: AMBIGUOUS' in answer:
+    elif 'STATUS: AMBIGUOUS' in answer_clean or 'STATUS:**AMBIGUOUS' in answer:
         status = 'AMBIGUOUS'
     else:
         status = 'NOT_ADDRESSED'
@@ -1049,7 +1051,7 @@ def parse_citations(raw_answer):
         loc_matches = re.findall(loc_pattern, clean)
         for loc in loc_matches:
             loc = loc.strip().rstrip('*').strip()
-            if not loc:
+            if not loc or len(loc) < 5:
                 continue
             page_match = re.search(r'Page\s*(\d+)', loc)
             page = f"Page {page_match.group(1)}" if page_match else ""

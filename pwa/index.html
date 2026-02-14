@@ -307,6 +307,7 @@
     }
     .badge-clear { background: rgba(63,185,80,0.15); color: var(--success); }
     .badge-ambiguous { background: rgba(210,153,34,0.15); color: #d29922; }
+    .badge-not-addressed { background: rgba(220,80,60,0.15); color: #dc5040; }
     .citation-count { font-size: 12px; color: var(--text-muted); }
     .answer-text { font-size: 15px; line-height: 1.7; margin-bottom: 18px; }
     .action-row {
@@ -524,7 +525,11 @@
         btn.className = 'section-btn';
         btn.style.animation = `fadeInUp 0.4s ease-out ${0.04 * i}s both`;
         btn.textContent = s;
-        btn.onclick = () => { document.getElementById('search-input').value = s; handleSearch(s); };
+        btn.onclick = () => { 
+          const query = 'What are the key provisions of ' + s + '?';
+          document.getElementById('search-input').value = query; 
+          handleSearch(query); 
+        };
         container.appendChild(btn);
       });
 
@@ -694,7 +699,7 @@
       const el = document.getElementById('results-content');
 
       const status = data.status || data.confidence || 'CLEAR';
-      const badgeClass = status === 'CLEAR' ? 'badge-clear' : (status === 'AMBIGUOUS' ? 'badge-ambiguous' : 'badge-ambiguous');
+      const badgeClass = status === 'CLEAR' ? 'badge-clear' : (status === 'AMBIGUOUS' ? 'badge-ambiguous' : 'badge-not-addressed');
       const badgeText = status === 'CLEAR' ? 'CLEAR' : (status === 'AMBIGUOUS' ? 'AMBIGUOUS' : 'NOT ADDRESSED');
       const citationCount = data.citations ? data.citations.length : 0;
 
