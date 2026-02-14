@@ -35,6 +35,7 @@ if 'streamlit' not in sys.modules:
 # Add app directory to path so we can import existing modules
 APP_DIR = Path(__file__).parent
 sys.path.insert(0, str(APP_DIR))
+sys.path.insert(0, str(APP_DIR / 'app'))
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
