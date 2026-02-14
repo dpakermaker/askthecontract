@@ -19,6 +19,7 @@ sys.path.append(str(Path(__file__).parent))
 from contract_manager import ContractManager
 from contract_logger import ContractLogger
 from nac_contract_data import *
+from landing_page import show_landing_page, show_logout_button
 
 # Page config
 st.set_page_config(
@@ -26,6 +27,13 @@ st.set_page_config(
     page_icon="✈️",
     layout="wide"
 )
+
+# ── AUTH GATE ──────────────────────────────────
+# Show landing page if not logged in
+if not show_landing_page():
+    st.stop()
+# If we get here, user is authenticated
+# ───────────────────────────────────────────────
 
 # ============================================================
 # PROFESSIONAL CSS THEME
@@ -1739,6 +1747,9 @@ else:
             <div style="font-size:1.15rem; font-weight:700; color:#ffffff; letter-spacing:-0.02em;">✈️ AskTheContract</div>
         </div>
         """, unsafe_allow_html=True)
+
+        # Logged-in user info + logout
+        show_logout_button()
 
         st.markdown("---")
 
