@@ -206,19 +206,22 @@ async def search(req: SearchRequest):
         raise HTTPException(status_code=503, detail="API keys not configured")
 
     start_time = time.time()
+    
+    # Normalize contract_id to uppercase (contracts stored as "NAC", not "nac")
+    cid = req.contract_id.upper()
 
     try:
-        chunks, embeddings = contract_manager.load_contract_data(req.contract_id)
+        chunks, embeddings = contract_manager.load_contract_data(cid)
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Contract not found: {e}")
 
     # Get airline name from contract metadata
-    info = contract_manager.get_contract_info(req.contract_id)
+    info = contract_manager.get_contract_info(cid)
     airline_name = info.get("airline_name", "Northern Air Cargo") if info else "Northern Air Cargo"
 
     # Run the full search pipeline
     answer, status, response_time, cached, model_tier = full_search_pipeline(
-        req.query, chunks, embeddings, req.contract_id, airline_name
+        req.query, chunks, embeddings, cid, airline_name
     )
 
     # Log the question
@@ -228,7 +231,7 @@ async def search(req: SearchRequest):
             question_text=req.query,
             answer_text=answer,
             status=status,
-            contract_id=req.contract_id,
+            contract_id=cid,
             response_time=response_time,
             category=category,
         )
@@ -255,15 +258,16 @@ async def search(req: SearchRequest):
 @app.post("/api/feedback")
 async def feedback(req: FeedbackRequest):
     try:
-        logger.log_rating(req.question, req.rating, req.contract_id, req.comment or "")
+        cid = req.contract_id.upper()
+        logger.log_rating(req.question, req.rating, cid, req.comment or "")
         if req.rating == "down":
             try:
-                semantic_cache.record_thumbs_down(req.question, req.contract_id)
+                semantic_cache.record_thumbs_down(req.question, cid)
             except Exception:
                 pass
             if req.comment:
                 try:
-                    semantic_cache.save_feedback(req.question, req.contract_id, req.comment)
+                    semantic_cache.save_feedback(req.question, cid, req.comment)
                 except Exception:
                     pass
         return {"success": True}
