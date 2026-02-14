@@ -656,7 +656,7 @@
         setTimeout(() => renderResults(MOCK_RESULT, q), 1800);
       } else {
         const contractSelect = document.getElementById('contract-select');
-        const contract_id = contractSelect.value === 'Northern Air Cargo — JCBA' ? 'nac_jcba' : contractSelect.value;
+        const contract_id = contractSelect.value === 'Northern Air Cargo — JCBA' ? 'NAC' : contractSelect.value;
         fetch(API_BASE + '/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -751,7 +751,7 @@
       if (!USE_MOCK && feedbackState) {
         const query = document.getElementById('results-query').textContent;
         const contractSelect = document.getElementById('contract-select');
-        const contract_id = contractSelect.value === 'Northern Air Cargo — JCBA' ? 'nac_jcba' : contractSelect.value;
+        const contract_id = contractSelect.value === 'Northern Air Cargo — JCBA' ? 'NAC' : contractSelect.value;
         fetch(API_BASE + '/feedback', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

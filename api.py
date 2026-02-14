@@ -126,12 +126,12 @@ class RegisterRequest(BaseModel):
 
 class SearchRequest(BaseModel):
     query: str
-    contract_id: str = "nac_jcba"
+    contract_id: str = "NAC"
 
 class FeedbackRequest(BaseModel):
     question: str
     rating: str  # "up" or "down"
-    contract_id: str = "nac_jcba"
+    contract_id: str = "NAC"
     comment: Optional[str] = ""
 
 class Citation(BaseModel):
