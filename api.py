@@ -1017,12 +1017,16 @@ def full_search_pipeline(question, chunks, embeddings, contract_id, airline_name
 def parse_citations(raw_answer):
     """Extract citations from raw answer text.
     Looks for patterns like: 📄 CONTRACT LANGUAGE: "..." 📍 Section X.Y, Page N
+    Handles **bold** markdown markers in Claude's output.
     """
     citations = []
+    
+    # Strip ** bold markers for easier parsing
+    clean = raw_answer.replace('**', '')
 
     # Pattern: 📄 CONTRACT LANGUAGE: "..." 📍 Section/Appendix ..., Page N
     pattern = r'📄\s*CONTRACT LANGUAGE:\s*["\u201c](.+?)["\u201d]\s*📍\s*(.+?)(?:\n|$)'
-    matches = re.findall(pattern, raw_answer, re.DOTALL)
+    matches = re.findall(pattern, clean, re.DOTALL)
 
     for quote_text, location in matches:
         quote_text = quote_text.strip()
@@ -1039,31 +1043,45 @@ def parse_citations(raw_answer):
 
         citations.append(Citation(section=section, page=page, text=quote_text))
 
-    # Also try CITE: format from older cached answers
-    cite_pattern = r'CITE:\s*(.+?)(?:\n|$)'
-    cite_matches = re.findall(cite_pattern, raw_answer)
-    for cite in cite_matches:
-        if not any(c.text[:30] in cite for c in citations):
-            citations.append(Citation(section=cite.strip(), page="", text=""))
+    # Fallback: try 📍 references without the full 📄 pattern
+    if not citations:
+        loc_pattern = r'📍\s*([^📝📄\n]+?)(?:\n|$)'
+        loc_matches = re.findall(loc_pattern, clean)
+        for loc in loc_matches:
+            loc = loc.strip().rstrip('*').strip()
+            if not loc:
+                continue
+            page_match = re.search(r'Page\s*(\d+)', loc)
+            page = f"Page {page_match.group(1)}" if page_match else ""
+            section = re.sub(r',?\s*Page\s*\d+.*$', '', loc).strip()
+            if section and not any(c.section == section for c in citations):
+                citations.append(Citation(section=section, page=page, text=""))
 
     return citations
 
 
 def extract_explanation(raw_answer):
-    """Extract the explanation/analysis portion from raw answer."""
+    """Extract the explanation/analysis portion from raw answer.
+    Handles **bold** markdown markers in Claude's output.
+    """
+    # Strip ** for matching, but keep original for display
+    clean = raw_answer.replace('**', '')
+    
     # Try to find the 📝 EXPLANATION section
-    expl_match = re.search(r'📝\s*EXPLANATION:\s*(.+?)(?=🔵\s*STATUS:|⚠️|$)', raw_answer, re.DOTALL)
+    expl_match = re.search(r'📝\s*EXPLANATION:\s*(.+?)(?=🔵\s*STATUS:|⚠️|$)', clean, re.DOTALL)
     if expl_match:
         explanation = expl_match.group(1).strip()
         # Also append the status line
-        status_match = re.search(r'🔵\s*STATUS:\s*(.+?)(?=⚠️|$)', raw_answer, re.DOTALL)
+        status_match = re.search(r'🔵\s*STATUS:\s*(.+?)(?=⚠️|$)', clean, re.DOTALL)
         if status_match:
             explanation += "\n\n🔵 STATUS: " + status_match.group(1).strip()
         return explanation
 
-    # If no structured format found, return the full answer minus disclaimer
-    answer = re.sub(r'⚠️\s*Disclaimer:.*$', '', raw_answer, flags=re.DOTALL).strip()
-    return answer
+    # If no structured format, return cleaned answer minus disclaimer and raw citation blocks
+    answer = re.sub(r'⚠️\s*Disclaimer:.*$', '', clean, flags=re.DOTALL).strip()
+    # Remove the citation blocks, keep the explanation
+    answer = re.sub(r'📄\s*CONTRACT LANGUAGE:.*?(?=📝|🔵|$)', '', answer, flags=re.DOTALL).strip()
+    return answer if answer else clean
 
 
 # ============================================================
