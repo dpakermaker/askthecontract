@@ -1168,20 +1168,25 @@ def full_search_pipeline(question, chunks, embeddings, contract_id, airline_name
         answer, status, rt = tier1_result
         return answer, status, rt, False, 'tier1'
 
-    # Cache check
+    # Get embedding for cache lookup/storage
     question_embedding = get_embedding(normalized)
-    cached_result = semantic_cache.lookup(question_embedding, contract_id)
-    if cached_result is not None:
-        cached_answer, cached_status, cached_time = cached_result
-        return cached_answer, cached_status, 0.0, True, 'cached'
+
+    # Cache check — skip if this is a follow-up question (needs conversation context)
+    if conversation_history and len(conversation_history) > 0:
+        print(f"[Cache] Skipping cache — follow-up question with {len(conversation_history)} prior Q&As")
+    else:
+        cached_result = semantic_cache.lookup(question_embedding, contract_id)
+        if cached_result is not None:
+            cached_answer, cached_status, cached_time = cached_result
+            return cached_answer, cached_status, 0.0, True, 'cached'
 
     # Full API call
     answer, status, response_time, model_tier = _ask_question_api(
         normalized, chunks, embeddings, contract_id, airline_name, conversation_history
     )
 
-    # Cache the result (except NOT_ADDRESSED)
-    if status != 'NOT_ADDRESSED':
+    # Cache the result (except NOT_ADDRESSED and follow-ups)
+    if status != 'NOT_ADDRESSED' and not (conversation_history and len(conversation_history) > 0):
         category = classify_question(normalized)
         semantic_cache.store(question_embedding, normalized, answer, status, response_time, contract_id, category)
 
