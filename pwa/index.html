@@ -669,7 +669,9 @@
 
       document.getElementById('results-query').textContent = q;
       document.getElementById('results-loading').classList.remove('hidden');
+      document.getElementById('results-content').innerHTML = '';
       document.getElementById('results-content').classList.add('hidden');
+      document.getElementById('followup-box').classList.add('hidden');
       feedbackState = null;
       showScreen('results');
 
