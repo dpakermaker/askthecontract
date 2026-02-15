@@ -83,6 +83,12 @@
     /* ── Screens ── */
     .screen { display: none; min-height: 100vh; flex-direction: column; position: relative; z-index: 1; }
     .screen.active { display: flex; }
+    /* Prevent iOS Safari form navigation bar from detecting inputs on hidden screens */
+    .screen:not(.active) input,
+    .screen:not(.active) select,
+    .screen:not(.active) textarea {
+      display: none !important;
+    }
 
     /* ── Header ── */
     .header {
@@ -433,14 +439,14 @@
         <h2>Search your <span class="gold-italic">contract</span></h2>
         <p>Search your contract in plain English. Get exact language with section and page citations.</p>
       </div>
-      <div class="search-bar">
-        <input class="search-input" type="text" id="search-input" placeholder="e.g. What is the minimum rest period?">
-        <button class="search-btn" onclick="handleSearch()">
+      <form class="search-bar" onsubmit="event.preventDefault();handleSearch();">
+        <input class="search-input" type="search" id="search-input" enterkeyhint="search" autocomplete="off" placeholder="e.g. What is the minimum rest period?">
+        <button class="search-btn" type="submit">
           <svg viewBox="0 0 24 24" fill="none" stroke="#0d1117" stroke-width="2.5" stroke-linecap="round">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
         </button>
-      </div>
+      </form>
       <div class="quick-questions">
         <p class="quick-questions-label">Explore your contract by section:</p>
         <div class="section-grid" id="section-btns"></div>
@@ -553,7 +559,7 @@
       document.getElementById('email').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
       document.getElementById('password').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
       document.getElementById('confirm-password').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
-      document.getElementById('search-input').addEventListener('keydown', e => { if (e.key === 'Enter') handleSearch(); });
+      // Search form handles Enter via onsubmit
     });
 
     // ─── PWA Install ───
@@ -574,18 +580,11 @@
 
     // ─── Navigation ───
     function showScreen(name) {
-      document.querySelectorAll('.screen').forEach(s => {
-        s.classList.remove('active');
-        // Disable inputs on hidden screens so iOS doesn't show form navigation arrows
-        s.querySelectorAll('input, select, textarea').forEach(inp => inp.setAttribute('tabindex', '-1'));
-      });
-      const activeScreen = document.getElementById(name + '-screen');
-      activeScreen.classList.add('active');
-      // Re-enable inputs on active screen
-      activeScreen.querySelectorAll('input, select, textarea').forEach(inp => inp.removeAttribute('tabindex'));
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(name + '-screen').classList.add('active');
       if (name === 'search') {
         document.getElementById('search-input').value = '';
-        document.getElementById('search-input').focus();
+        setTimeout(() => document.getElementById('search-input').focus(), 100);
       }
     }
 
