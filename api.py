@@ -124,9 +124,14 @@ class RegisterRequest(BaseModel):
     password: str
     display_name: Optional[str] = ""
 
+class ConversationEntry(BaseModel):
+    question: str
+    answer: str
+
 class SearchRequest(BaseModel):
     query: str
     contract_id: str = "NAC"
+    conversation_history: Optional[List[ConversationEntry]] = None
 
 class FeedbackRequest(BaseModel):
     question: str
@@ -220,9 +225,14 @@ async def search(req: SearchRequest):
     info = contract_manager.get_contract_info(cid)
     airline_name = info.get("airline_name", "Northern Air Cargo") if info else "Northern Air Cargo"
 
+    # Convert conversation history to dict format
+    conv_history = None
+    if req.conversation_history:
+        conv_history = [{"question": e.question, "answer": e.answer} for e in req.conversation_history]
+
     # Run the full search pipeline
     answer, status, response_time, cached, model_tier = full_search_pipeline(
-        req.query, chunks, embeddings, cid, airline_name
+        req.query, chunks, embeddings, cid, airline_name, conv_history
     )
 
     # Log the question
@@ -744,7 +754,7 @@ _SIMPLE_PATTERNS = [
 _SIMPLE_COMPILED = [re.compile(p, re.IGNORECASE) for p in _SIMPLE_PATTERNS]
 
 
-def _classify_complexity(question_lower, matching_packs=None, has_pay_ref=False, has_grievance_ref=False):
+def _classify_complexity(question_lower, matching_packs=None, has_pay_ref=False, has_grievance_ref=False, conversation_history=None):
     scenario_count = 0
     scenario_keywords = ['duty', 'block', 'flew', 'hours', 'day off', 'overtime',
                          'extension', 'junior assign', 'reserve', 'rap']
@@ -766,6 +776,20 @@ def _classify_complexity(question_lower, matching_packs=None, has_pay_ref=False,
         if has_numbers or has_times:
             return 'complex'
         return 'standard'
+
+    # Follow-up on a complex conversation
+    if conversation_history and len(conversation_history) >= 2:
+        last_answer = conversation_history[-1].get('answer', '')
+        if 'AMBIGUOUS' in last_answer or 'OVERTIME SCOPE DISPUTE' in last_answer:
+            follow_up_signals = ['what if', 'what about', 'and if', 'but what if',
+                                 'in that case', 'same scenario', 'same situation',
+                                 'follow up', 'followup', 'you said', 'you mentioned',
+                                 'what would change', 'does that mean']
+            is_short = len(question_lower.split()) <= 15
+            has_follow_up = any(sig in question_lower for sig in follow_up_signals)
+            if is_short and has_follow_up:
+                return 'complex'
+
     if len(question_lower.split()) <= 10:
         for pattern in _SIMPLE_COMPILED:
             if pattern.search(question_lower):
@@ -878,7 +902,7 @@ def tier1_instant_answer(question_lower):
 
 
 # ── API Call (Anthropic) ──
-def _ask_question_api(question, chunks, embeddings, contract_id, airline_name):
+def _ask_question_api(question, chunks, embeddings, contract_id, airline_name, conversation_history=None):
     start_time = time.time()
     relevant_chunks = search_contract(question, chunks, embeddings)
 
@@ -896,6 +920,7 @@ def _ask_question_api(question, chunks, embeddings, contract_id, airline_name):
     model_tier = _classify_complexity(
         question.lower(), matching_packs=matching_packs,
         has_pay_ref=bool(pay_ref), has_grievance_ref=bool(grievance_ref),
+        conversation_history=conversation_history,
     )
     model_name = MODEL_TIERS[model_tier]
     print(f"[Router] {model_tier.upper()} → {model_name} | Q: {question[:80]}")
@@ -910,48 +935,129 @@ def _ask_question_api(question, chunks, embeddings, contract_id, airline_name):
 
     if model_tier == 'simple':
         system_prompt = f"""You are a neutral contract reference tool for the {airline_name} pilot union contract (JCBA).
+
 SCOPE: This tool ONLY searches the {airline_name} JCBA. No FARs, company manuals, or other policies.
+
 RULES:
 1. Quote exact contract language with section and page citations
 2. Never interpret beyond what the contract explicitly states
 3. Use neutral language ("the contract states" not "you get")
 4. Acknowledge when the contract is silent
-STATUS: CLEAR (unambiguous), AMBIGUOUS (multiple interpretations), NOT ADDRESSED (no relevant language)
+
+STATUS: 🔵 CLEAR (unambiguous answer), 🔵 AMBIGUOUS (multiple interpretations), 🔵 NOT ADDRESSED (no relevant language)
+
 FORMAT:
 📄 CONTRACT LANGUAGE: [Exact quote] 📍 [Section, Page]
 📝 EXPLANATION: [Plain English]
 🔵 STATUS: [CLEAR/AMBIGUOUS/NOT ADDRESSED] - [One sentence]
-⚠️ Disclaimer: This information is for reference only and does not constitute legal advice.
-FORMATTING: Use **bold** for labels, not markdown headings. No $ signs."""
+⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.
+
+FORMATTING RULES:
+- Do NOT use markdown headings (#, ##, ###) — they render too large
+- Use **bold text** for sub-topics and labels instead
+- Keep answers compact and professional
+- Do NOT add a title or heading at the top of your answer
+- Do NOT use dollar signs ($) — write amounts without them"""
         max_tokens = 1000
     else:
-        pay_sections = ""
+        pay_prompt_sections = ""
         if is_pay_question:
-            pay_sections = f"""
+            pay_prompt_sections = f"""
 CURRENT PAY RATES:
-DOS = July 24, 2018. Rates increase 2% annually. {PAY_INCREASES} increases applied. CURRENT = DOS rate × {PAY_MULTIPLIER:.5f}.
-PAY QUESTION RULES: Calculate ALL four pay provisions (Block, Duty Rig, DPG 3.82, Trip Rig) and show which is GREATEST.
-Do NOT use dollar signs ($)."""
+DOS = July 24, 2018. Per Section 3.B.3, rates increase 2% annually on DOS anniversary. As of today: {PAY_INCREASES} increases (July 2019–July {2018 + PAY_INCREASES}). CURRENT RATE = Appendix A DOS rate × {PAY_MULTIPLIER:.5f}. Always use DOS column, multiply by {PAY_MULTIPLIER:.5f}, show math. If longevity year is stated, look up that rate in Appendix A and calculate. Do NOT say you cannot find the rate if a year is provided.
 
-        system_prompt = f"""You are a neutral contract reference tool for the {airline_name} pilot union contract (JCBA).
-SCOPE: ONLY the {airline_name} JCBA. No FARs, company manuals, or other policies.
+PAY QUESTION RULES:
+When pay/compensation is involved:
+- Identify position and longevity year if provided
+- Calculate ALL four pay provisions and compare:
+  1. Block PCH: [flight time]
+  2. Duty Rig: [total duty hours] ÷ 2 = [X] PCH (if exact times unknown, show "Minimum Duty Rig estimate" using available info — NEVER say "cannot calculate")
+  3. DPG: 3.82 PCH
+  4. Trip Rig: [TAFD hours] ÷ 4.9 = [X] PCH (or "Not applicable — single-day duty period")
+  → Pilot receives the GREATER of these
+- Show all math: PCH values AND dollar amounts
+- Do NOT use dollar signs ($) — write amounts without them
+- End with: "The pilot should be paid [X] PCH × [rate] = [total]"
+
+DUTY RIG ESTIMATION: If exact times are missing, calculate minimum estimate from what IS known. For assigned trips: duty starts minimum 1 hour before departure. For reserve: duty starts at RAP DOT or 1 hour before departure (whichever earlier). Always provide estimate.
+
+OVERTIME PREMIUM (Section 3.Q.1):
+150% pay for duty on scheduled Day Off applies ONLY when caused by: (a) circumstances beyond Company control (weather, mechanical, ATC, customer accommodation), OR (b) assignment to remain with aircraft for repairs.
+- If cause is NOT stated: quote trigger conditions, present 150% as CONDITIONAL, mark AMBIGUOUS
+- Do NOT automatically apply 150% without a stated trigger
+- OVERTIME SCOPE DISPUTE (REQUIRED ONLY when a single duty period begins on a workday and extends into a Day Off): "⚠️ OVERTIME SCOPE DISPUTE: Even if the 150% premium applies, the contract does not specify whether it covers all PCH earned in the duty period or only the PCH attributable to the Day Off hours. Both interpretations are reasonable, and this is a potential area of dispute."
+  Do NOT include this dispute paragraph when duty is entirely on a Day Off (e.g., Junior Assignment, full Day Off duty). The scope dispute only exists when there is a split between workday hours and Day Off hours within the same duty period.
+
+RESERVE PAY:
+- R-1 and R-2 are DUTY — duty starts at scheduled RAP DOT, not when called or when flight departs
+- Use FULL duty period for Duty Rig: from RAP DOT or 1hr before departure (whichever earlier) to release
+- Per Section 3.F.1.b: Reserve Pilot receives GREATER of DPG or PCH from assigned trip
+- If duty extends past RAP or into Day Off, you MUST address: extension analysis, 0200 LDT rule (15.A.7-8), overtime premium eligibility, and whether single duty period = one Workday (Section 3.D.2)
+"""
+
+        system_prompt = f"""You are a neutral contract reference tool for the {airline_name} pilot union contract (JCBA). Provide accurate, unbiased analysis based solely on contract language provided.
+
+SCOPE: This tool ONLY searches the {airline_name} JCBA. It has NO access to FARs, company manuals/SOPs, company policies/memos, other labor agreements, or employment laws. If asked about these, state: "This tool only searches the {airline_name} pilot contract (JCBA) and cannot answer questions about FAA regulations, company manuals, or other policies outside the contract."
+
 CORE PRINCIPLES:
 1. Quote exact contract language with section and page citations
 2. Never interpret beyond what the contract explicitly states
-3. Use neutral language
-4. Acknowledge when the contract is silent
-5. Read ALL provided sections before answering
-KEY DEFINITIONS: Block Time = brakes released to brakes set. Day Off = calendar day free of ALL Duty at Domicile.
-DPG = 3.82 PCH minimum per Day. Duty Rig = 1 PCH per 2 hours Duty. Trip Rig = TAFD ÷ 4.9.
-{pay_sections}
-STATUS: 🔵 CLEAR / 🔵 AMBIGUOUS / 🔵 NOT ADDRESSED
-FORMAT:
+3. Never assume provisions exist that are not in the provided text
+4. Use neutral language ("the contract states" not "you get" or "company owes")
+5. Acknowledge when the contract is silent; cite all applicable provisions
+6. Read ALL provided sections before answering — look across pay, scheduling, reserve, and hours of service
+
+ANALYSIS RULES:
+- Check for defined terms — many words have specific contract definitions
+- Note qualifiers: "shall" vs "may", "except", "unless", "notwithstanding", "provided"
+- Distinguish: "scheduled" vs "actual", "assigned" vs "awarded"
+- Distinguish pilot categories: Regular Line, Reserve (R-1/R-2/R-3/R-4), Composite, TDY, Domicile Flex
+- Distinguish assignment types: Trip Pairings, Reserve Assignments, Company-Directed, Training, Deadhead
+
+KEY DEFINITIONS (from Section 2):
+- Block Time = Brakes released to brakes set. Flight Time = Brake release to block in.
+- Day = Calendar Day 00:00–23:59 LDT. Day Off = Scheduled Day free of ALL Duty at Domicile.
+- DPG = 3.82 PCH minimum per Day of scheduled Duty.
+- Duty Period = Continuous time from Report for Duty until Released and placed into Rest. Rest Period ≠ Day Off.
+- Duty Rig = 1 PCH per 2 hours Duty, prorated minute-by-minute. Trip Rig = TAFD ÷ 4.9.
+- Extension = Involuntary additional Flight/Duty after last segment of Trip Pairing.
+- FIFO = First In, First Out reserve scheduling per Section 15.
+- JA = Junior Assignment: involuntary Duty on Day Off, inverse seniority (most junior first).
+- PCH = Pay Credit Hours — the unit of compensation.
+- R-1 = In-Domicile Short Call (Duty). R-2 = Out-of-Domicile Short Call (Duty). R-3 = Long Call. R-4 = Airport RAP (Duty).
+- Composite Line = Blank line constructed after SAP. Domicile Flex Line = Reserve with 13+ consecutive Days Off, all Workdays R-1.
+- Ghost Bid = Line a Check Airman bids but cannot be awarded; sets new MPG.
+- Phantom Award = Bidding higher-paying Position per seniority to receive that pay rate.
+{pay_prompt_sections}
+SCHEDULING/REST RULES:
+- Check across Section 13 (Hours of Service), Section 14 (Scheduling), Section 15 (Reserve)
+- Different line types have different rules — cite which line type each provision applies to
+- Distinguish "Day Off" (defined term) from "Rest Period" (defined term)
+
+STATUS DETERMINATION:
+🔵 CLEAR = Contract explicitly and unambiguously answers; no conflicting provisions
+🔵 AMBIGUOUS = Multiple interpretations possible, conflicting provisions, missing scenario details needed to determine which rule applies, or premium trigger conditions not confirmed
+🔵 NOT ADDRESSED = Contract contains no relevant language
+
+RESPONSE FORMAT:
 📄 CONTRACT LANGUAGE: [Exact quote] 📍 [Section, Page]
 (Repeat for each provision)
 📝 EXPLANATION: [Plain English analysis]
-🔵 STATUS: [CLEAR/AMBIGUOUS/NOT ADDRESSED] - [One sentence]
-⚠️ Disclaimer: This information is for reference only and does not constitute legal advice.
-FORMATTING: Use **bold** for labels, no markdown headings (#). No $ signs. Keep compact."""
+  Include ⏰ EXTENSION / DAY OFF DUTY ANALYSIS when duty crosses past RAP or into Day Off
+  Include ⚠️ OVERTIME SCOPE DISPUTE only when duty starts on a workday and extends into a Day Off (not for pure Day Off duty like JA)
+🔵 STATUS: [CLEAR/AMBIGUOUS/NOT ADDRESSED] - [One sentence justification]
+⚠️ Disclaimer: This information is for reference only and does not constitute legal advice. Consult your union representative for guidance on contract interpretation and disputes.
+
+FORMATTING RULES:
+- Do NOT use markdown headings (#, ##, ###) — they render too large in the UI
+- Use **bold text** for sub-topics and labels instead (e.g., **Accrual:** not ## ACCRUAL)
+- Do NOT add a title or heading at the top of your answer — just start with the content
+- Keep answers compact, professional, and easy to scan
+- Use short paragraphs, not walls of text
+
+Every claim must trace to a specific quoted provision. Do not speculate about "common practice" or reference external laws unless the contract itself references them.
+
+Do NOT use dollar signs ($) — write amounts without them."""
         max_tokens = 2000 if model_tier == 'complex' else 1500
 
     user_content = f"CONTRACT SECTIONS:\n{context}\n\nQUESTION: {question}\n"
@@ -961,22 +1067,40 @@ FORMATTING: Use **bold** for labels, no markdown headings (#). No $ signs. Keep 
         user_content += f"\n{grievance_ref}\n"
     user_content += "\nAnswer:"
 
+    messages = []
+
+    # Add last 3 Q&A pairs as conversation context
+    if conversation_history:
+        recent = conversation_history[-3:]
+        for qa in recent:
+            messages.append({
+                "role": "user",
+                "content": f"PREVIOUS QUESTION: {qa['question']}"
+            })
+            messages.append({
+                "role": "assistant",
+                "content": qa['answer']
+            })
+
+    messages.append({"role": "user", "content": user_content})
+
     message = anthropic_client.messages.create(
         model=model_name,
         max_tokens=max_tokens,
         temperature=0,
         system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral", "ttl": "1h"}}],
-        messages=[{"role": "user", "content": user_content}],
+        messages=messages,
     )
 
     answer = message.content[0].text
     response_time = time.time() - start_time
 
-    # Strip markdown bold for status detection
+    # Status detection — must match Streamlit exactly
+    # Strip only ** bold markers, keep emoji intact
     answer_clean = answer.replace('**', '')
-    if 'STATUS: CLEAR' in answer_clean or 'STATUS:**CLEAR' in answer:
+    if '🔵 STATUS: CLEAR' in answer or '🔵 STATUS: CLEAR' in answer_clean:
         status = 'CLEAR'
-    elif 'STATUS: AMBIGUOUS' in answer_clean or 'STATUS:**AMBIGUOUS' in answer:
+    elif '🔵 STATUS: AMBIGUOUS' in answer or '🔵 STATUS: AMBIGUOUS' in answer_clean:
         status = 'AMBIGUOUS'
     else:
         status = 'NOT_ADDRESSED'
@@ -984,8 +1108,57 @@ FORMATTING: Use **bold** for labels, no markdown headings (#). No $ signs. Keep 
     return answer, status, response_time, model_tier
 
 
+def _get_did_you_mean(question_lower):
+    """Suggest related Quick Reference Cards and Tier 1 topics for NOT_ADDRESSED answers."""
+    suggestions = []
+
+    qrc_matches = {
+        'pay': ['Pay Calculation Guide', 'What is a Pay Discrepancy?'],
+        'paid': ['Pay Calculation Guide', 'What is a Pay Discrepancy?'],
+        'rate': ['Pay Calculation Guide'],
+        'rig': ['Pay Calculation Guide'],
+        'dpg': ['Pay Calculation Guide'],
+        'overtime': ['Pay Calculation Guide', 'Extension Rules'],
+        'premium': ['Pay Calculation Guide', 'Junior Assignment Rules'],
+        'reserve': ['Reserve Types & Definitions'],
+        'r-1': ['Reserve Types & Definitions'],
+        'r-2': ['Reserve Types & Definitions'],
+        'r-3': ['Reserve Types & Definitions'],
+        'r-4': ['Reserve Types & Definitions'],
+        'fifo': ['Reserve Types & Definitions'],
+        'day off': ['Minimum Days Off / Availability', 'Junior Assignment Rules'],
+        'days off': ['Minimum Days Off / Availability'],
+        'schedule': ['Minimum Days Off / Availability'],
+        'line': ['Minimum Days Off / Availability'],
+        'extension': ['Extension Rules'],
+        'extended': ['Extension Rules'],
+        'junior assign': ['Junior Assignment Rules'],
+        'ja ': ['Junior Assignment Rules'],
+        'grievance': ['How to File a Grievance', 'What Evidence to Save'],
+        'grieve': ['How to File a Grievance', 'What Evidence to Save'],
+        'dispute': ['How to File a Grievance', 'What Evidence to Save'],
+        'evidence': ['What Evidence to Save'],
+        'open time': ['Open Time & Trip Pickup'],
+        'trip trade': ['Open Time & Trip Pickup'],
+        'pickup': ['Open Time & Trip Pickup'],
+    }
+
+    matched_cards = set()
+    for keyword, cards in qrc_matches.items():
+        if keyword in question_lower:
+            matched_cards.update(cards)
+
+    if matched_cards:
+        card_list = ', '.join(f'**{c}**' for c in list(matched_cards)[:3])
+        suggestions.append(f"\n\n💡 **Related Quick Reference Cards:** {card_list} — available from the Quick Reference menu above.")
+
+    suggestions.append("\n\n🔄 **Tip:** Try rephrasing your question with specific contract terms (e.g., \"Section 6\" or \"per diem\" or \"reserve reassignment\"). The search works best with exact contract language.")
+
+    return ''.join(suggestions)
+
+
 # ── Full Search Pipeline ──
-def full_search_pipeline(question, chunks, embeddings, contract_id, airline_name):
+def full_search_pipeline(question, chunks, embeddings, contract_id, airline_name, conversation_history=None):
     """Returns (answer, status, response_time, cached, model_tier)"""
     normalized = preprocess_question(question.strip()).lower()
 
@@ -1004,13 +1177,19 @@ def full_search_pipeline(question, chunks, embeddings, contract_id, airline_name
 
     # Full API call
     answer, status, response_time, model_tier = _ask_question_api(
-        normalized, chunks, embeddings, contract_id, airline_name
+        normalized, chunks, embeddings, contract_id, airline_name, conversation_history
     )
 
     # Cache the result (except NOT_ADDRESSED)
     if status != 'NOT_ADDRESSED':
         category = classify_question(normalized)
         semantic_cache.store(question_embedding, normalized, answer, status, response_time, contract_id, category)
+
+    # "Did you mean?" — append suggestions when NOT_ADDRESSED
+    if status == 'NOT_ADDRESSED':
+        suggestions = _get_did_you_mean(normalized)
+        if suggestions:
+            answer += suggestions
 
     return answer, status, response_time, False, model_tier
 

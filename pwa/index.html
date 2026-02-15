@@ -516,6 +516,9 @@
       ]
     };
 
+    // Conversation history for follow-up questions
+    let conversationHistory = [];
+
     // ─── Init ───
     document.addEventListener('DOMContentLoaded', () => {
       // Render section buttons
@@ -640,6 +643,7 @@
 
     function handleLogout() {
       currentUser = null;
+      conversationHistory = [];
       document.getElementById('email').value = '';
       document.getElementById('password').value = '';
       document.getElementById('confirm-password').value = '';
@@ -665,13 +669,21 @@
         fetch(API_BASE + '/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: q, contract_id: contract_id })
+          body: JSON.stringify({ 
+            query: q, 
+            contract_id: contract_id,
+            conversation_history: conversationHistory.slice(-3)
+          })
         })
         .then(r => {
           if (!r.ok) return r.json().then(d => { throw new Error(d.detail || 'Search failed'); });
           return r.json();
         })
-        .then(data => renderResults(data, q))
+        .then(data => {
+          // Store in conversation history for follow-ups
+          conversationHistory.push({ question: q, answer: data.raw_answer || data.answer });
+          renderResults(data, q);
+        })
         .catch(err => {
           document.getElementById('results-loading').classList.add('hidden');
           const el = document.getElementById('results-content');
