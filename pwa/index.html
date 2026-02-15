@@ -423,11 +423,10 @@
       </div>
     </div>
     <div class="search-content">
-      <div class="contract-selector">
+      <div class="contract-selector" style="display:none;">
         <label class="field-label">Active Contract</label>
         <select class="contract-select" id="contract-select">
           <option value="nac">Northern Air Cargo — JCBA</option>
-          <option value="demo">Demo Airline — Sample CBA</option>
         </select>
       </div>
       <div class="search-hero">
@@ -575,8 +574,15 @@
 
     // ─── Navigation ───
     function showScreen(name) {
-      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-      document.getElementById(name + '-screen').classList.add('active');
+      document.querySelectorAll('.screen').forEach(s => {
+        s.classList.remove('active');
+        // Disable inputs on hidden screens so iOS doesn't show form navigation arrows
+        s.querySelectorAll('input, select, textarea').forEach(inp => inp.setAttribute('tabindex', '-1'));
+      });
+      const activeScreen = document.getElementById(name + '-screen');
+      activeScreen.classList.add('active');
+      // Re-enable inputs on active screen
+      activeScreen.querySelectorAll('input, select, textarea').forEach(inp => inp.removeAttribute('tabindex'));
       if (name === 'search') {
         document.getElementById('search-input').value = '';
         document.getElementById('search-input').focus();
