@@ -466,7 +466,7 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
         </svg>
-        New search
+        Back to sections
       </button>
       <div class="query-card">
         <p class="label">Your Question</p>
@@ -477,15 +477,14 @@
         <p class="loading-text">Searching contract language...</p>
       </div>
       <div id="results-content" class="hidden"></div>
-      <div id="followup-box" class="hidden" style="margin-top:16px;">
-        <p class="label" style="margin-bottom:6px;color:var(--gold-primary);">Ask a follow-up</p>
+      <div id="results-search-box" class="hidden" style="margin-top:16px;">
         <div style="display:flex;gap:8px;">
-          <input type="text" id="followup-input" placeholder="e.g. what if it was due to weather?" 
+          <input type="text" id="results-search-input" placeholder="Ask another question..." 
             style="flex:1;padding:12px 16px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--card-bg);color:var(--text-primary);font-size:15px;font-family:inherit;"
-            onkeydown="if(event.key==='Enter')handleFollowUp()">
-          <button onclick="handleFollowUp()" 
+            onkeydown="if(event.key==='Enter')handleResultsSearch()">
+          <button onclick="handleResultsSearch()" 
             style="padding:12px 18px;border-radius:10px;border:none;background:var(--gold-primary);color:#0a1628;font-weight:600;font-size:14px;cursor:pointer;white-space:nowrap;">
-            Ask
+            Search
           </button>
         </div>
       </div>
@@ -671,7 +670,7 @@
       document.getElementById('results-loading').classList.remove('hidden');
       document.getElementById('results-content').innerHTML = '';
       document.getElementById('results-content').classList.add('hidden');
-      document.getElementById('followup-box').classList.add('hidden');
+      document.getElementById('results-search-box').classList.add('hidden');
       feedbackState = null;
       showScreen('results');
 
@@ -707,12 +706,52 @@
       }
     }
 
-    function handleFollowUp() {
-      const input = document.getElementById('followup-input');
+    function isFollowUp(query) {
+      const q = query.toLowerCase().trim();
+      const words = q.split(/\s+/);
+      
+      // Must be relatively short to be a follow-up
+      if (words.length > 20) return false;
+      
+      // Must have conversation history to follow up on
+      if (conversationHistory.length === 0) return false;
+      
+      // Explicit follow-up phrases
+      const followUpPhrases = [
+        'what if', 'what about', 'and if', 'but what if', 'how about',
+        'in that case', 'same scenario', 'same situation', 'same question',
+        'follow up', 'followup', 'you said', 'you mentioned',
+        'what would change', 'does that mean', 'would that', 'could that',
+        'what happens if', 'and what about', 'but what about',
+        'can i refuse', 'can i decline', 'can they', 'could they',
+        'is that a', 'would this be', 'does this mean'
+      ];
+      if (followUpPhrases.some(p => q.includes(p))) return true;
+      
+      // Short question with pronouns referencing prior context
+      if (words.length <= 12) {
+        const contextPronouns = ['it', 'that', 'this', 'they', 'them', 'those', 'the same'];
+        if (contextPronouns.some(p => q.includes(p))) return true;
+      }
+      
+      // Very short question likely referencing prior answer
+      if (words.length <= 6 && conversationHistory.length > 0) return true;
+      
+      return false;
+    }
+
+    function handleResultsSearch() {
+      const input = document.getElementById('results-search-input');
       const q = input.value.trim();
       if (!q) return;
       input.value = '';
-      document.getElementById('followup-box').classList.add('hidden');
+      
+      if (!isFollowUp(q)) {
+        // New question — clear history so cache works normally
+        conversationHistory = [];
+      }
+      // If follow-up, history stays intact and gets sent
+      
       handleSearch(q);
     }
 
@@ -771,9 +810,9 @@
       el.classList.remove('hidden');
       el.style.animation = 'fadeInUp 0.5s ease-out';
       
-      // Show follow-up input
-      document.getElementById('followup-box').classList.remove('hidden');
-      document.getElementById('followup-input').focus();
+      // Show search box for next question
+      document.getElementById('results-search-box').classList.remove('hidden');
+      document.getElementById('results-search-input').focus();
     }
 
     // ─── Results Interactions ───
